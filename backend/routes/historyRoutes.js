@@ -9,6 +9,7 @@ const upload = require('../middleware/uploadMiddleware');
 const authMiddleware = require('../middleware/authMiddleware');
 const getDateFilter = require('../utils/dateFilter');
 const getWebsiteCategory = require('../services/categoryService');
+const isValidDateTime = require('../utils/validDateTime');
 
 // Get browser history of the logged-in user
 router.get('/', authMiddleware, async (req, res) => {
@@ -188,10 +189,7 @@ router.post(
                     });
                 }
 
-                if (
-                    !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(visitTime) ||
-                    Number.isNaN(Date.parse(visitTime))
-                ) {
+                if (!isValidDateTime(visitTime)) {
                     return res.status(400).json({
                         message: 'CSV contains an invalid date or time'
                     });

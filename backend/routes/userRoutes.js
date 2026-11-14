@@ -6,30 +6,67 @@ const jwt = require('jsonwebtoken');
 
 const db = require('../config/db');
 const authMiddleware = require('../middleware/authMiddleware');
-
-// Get all users
-router.get('/', async (req, res) => {
-    try {
-        const [users] = await db.query(
-            'SELECT id, name, email, created_at FROM users'
-        );
-
-        res.json(users);
-    } catch (error) {
-        res.status(500).json({
-            message: 'Error fetching users'
-        });
-    }
-});
+const loginLimiter = require('../middleware/loginLimiter');
 
 // Register a new user
 router.post('/register', async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        let { name, email, password } = req.body;
 
         if (!name || !email || !password) {
             return res.status(400).json({
                 message: 'All fields are required'
+            });
+        }
+
+        if (
+            typeof name !== 'string' ||
+            typeof email !== 'string' ||
+            typeof password !== 'string'
+        ) {
+            return res.status(400).json({
+                message: 'Invalid input types'
+            });
+        }
+
+        name = name.trim();
+        email = email.trim().toLowerCase();
+
+        if (!name || name.length > 100) {
+            return res.status(400).json({
+                message: 'Name must be between 1 and 100 characters'
+            });
+        }
+
+        const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+        if (!emailPattern.test(email) || email.length > 150) {
+            return res.status(400).json({
+                message: 'Please enter a valid email address'
+            });
+        }
+
+        if (password.length < 8) {
+            return res.status(400).json({
+                message: 'Password must contain at least 8 characters'
+            });
+        }
+
+        if (!/[A-Z]/.test(password)) {
+            return res.status(400).json({
+                message: 'Password must contain at least one uppercase letter'
+            });
+        }
+
+        if (!/[a-z]/.test(password)) {
+            return res.status(400).json({
+                message: 'Password must contain at least one lowercase letter'
+            });
+        }
+
+        if (!/[0-9]/.test(password)) {
+            return res.status(400).json({
+                message: 'Password must contain at least one number'
             });
         }
 
@@ -62,20 +99,27 @@ router.post('/register', async (req, res) => {
     }
 });
 
-// User login
-router.post('/login', async (req, res) => {
+// User login with rate limiting
+router.post('/login', loginLimiter, async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        if (!email || !password) {
+        if (
+            typeof email !== 'string' ||
+            typeof password !== 'string' ||
+            !email.trim() ||
+            !password
+        ) {
             return res.status(400).json({
                 message: 'Email and password are required'
             });
         }
 
+        const normalizedEmail = email.trim().toLowerCase();
+
         const [users] = await db.query(
-            'SELECT * FROM users WHERE email = ?',
-            [email]
+            'SELECT id, name, email, password FROM users WHERE email = ?',
+            [normalizedEmail]
         );
 
         if (users.length === 0) {
