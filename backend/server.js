@@ -40,6 +40,14 @@ app.use((error, req, res, next) => {
         return next(error);
     }
 
+    // Handle oversized JSON requests
+    if (error.type === 'entity.too.large') {
+        return res.status(413).json({
+            message: 'Request body exceeds the 10 KB limit'
+        });
+    }
+
+    // Handle file upload errors
     if (error instanceof multer.MulterError) {
         const statusCode =
             error.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
