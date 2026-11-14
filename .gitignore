@@ -10,3 +10,7 @@ node_modules/
 
 # Temporary files
 *.tmp
+# Temporary test files
+backend/*_test.csv
+backend/*_test.txt
+backend/test_history.csv

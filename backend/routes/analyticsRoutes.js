@@ -177,4 +177,32 @@ router.get('/hourly', authMiddleware, async (req, res) => {
     }
 });
 
+// Get website-wise visits for each hour
+router.get('/hourly-websites', authMiddleware, async (req, res) => {
+    try {
+        const { condition, values } = getDateFilter(req.query);
+
+        const [websites] = await db.query(
+            `SELECT
+                HOUR(bh.visit_time) AS activity_hour,
+                bh.website_url,
+                COUNT(*) AS total_visits
+             FROM browser_history bh
+             INNER JOIN uploaded_files uf
+                ON bh.upload_id = uf.id
+             WHERE uf.user_id = ? ${condition}
+             GROUP BY HOUR(bh.visit_time), bh.website_url
+             ORDER BY activity_hour ASC, total_visits DESC`,
+            [req.user.id, ...values]
+        );
+
+        res.json(websites);
+
+    } catch (error) {
+        res.status(400).json({
+            message: error.message || 'Error fetching hourly website analytics'
+        });
+    }
+});
+
 module.exports = router;
