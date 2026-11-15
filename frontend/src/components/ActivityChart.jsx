@@ -26,7 +26,7 @@ ChartJS.register(
     Filler
 );
 
-// Dynamic chart colors based on selected theme
+// Shared chart options based on selected theme
 const getChartOptions = (theme) => {
     const isDark = theme === 'dark';
 
@@ -39,12 +39,24 @@ const getChartOptions = (theme) => {
     return {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: {
+            intersect: false,
+            mode: 'index'
+        },
+        animation: {
+            duration: 700
+        },
         plugins: {
             legend: {
                 labels: {
                     color: textColor,
                     usePointStyle: true,
-                    padding: 20
+                    pointStyle: 'circle',
+                    padding: 20,
+                    font: {
+                        family: 'Inter',
+                        size: 12
+                    }
                 }
             },
             tooltip: {
@@ -52,26 +64,72 @@ const getChartOptions = (theme) => {
                 titleColor: textColor,
                 bodyColor: textColor,
                 borderColor: tooltipBorder,
-                borderWidth: 1
+                borderWidth: 1,
+                padding: 12,
+                cornerRadius: 8,
+                displayColors: true,
+                titleFont: {
+                    size: 12,
+                    weight: '600'
+                },
+                bodyFont: {
+                    size: 12
+                }
             }
         },
         scales: {
             x: {
-                ticks: { color: mutedColor },
-                grid: { color: gridColor }
+                ticks: {
+                    color: mutedColor,
+                    font: {
+                        size: 11
+                    }
+                },
+                grid: {
+                    display: false
+                },
+                border: {
+                    display: false
+                }
             },
             y: {
                 beginAtZero: true,
-                ticks: { color: mutedColor },
-                grid: { color: gridColor }
+                ticks: {
+                    color: mutedColor,
+                    precision: 0,
+                    font: {
+                        size: 11
+                    }
+                },
+                grid: {
+                    color: gridColor
+                },
+                border: {
+                    display: false,
+                    dash: [4, 4]
+                }
             }
         }
     };
 };
 
-export function ActivityLineChart({ activity = [], theme = 'dark' }) {
+// Daily Browsing Activity
+export function ActivityLineChart({
+    activity = [],
+    theme = 'dark'
+}) {
     const data = {
-        labels: activity.map(item => item.activity_date),
+        labels: activity.map(item => {
+            const date = new Date(`${item.activity_date}T00:00:00`);
+
+            return Number.isNaN(date.getTime())
+                ? item.activity_date
+                : date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    timeZone: 'UTC'
+                });
+        }),
         datasets: [{
             label: 'Website Visits',
             data: activity.map(item => Number(item.total_visits)),
@@ -79,18 +137,39 @@ export function ActivityLineChart({ activity = [], theme = 'dark' }) {
             backgroundColor: 'rgba(59, 130, 246, 0.15)',
             fill: true,
             tension: 0.4,
-            pointRadius: 4
+            borderWidth: 3,
+            pointRadius: 4,
+            pointHoverRadius: 7,
+            pointBackgroundColor: '#3B82F6',
+            pointBorderColor: theme === 'dark' ? '#17243A' : '#FFFFFF',
+            pointBorderWidth: 2
         }]
     };
 
-    return (
-        <Line
-            data={data}
-            options={getChartOptions(theme)}
-        />
-    );
+    const options = {
+        ...getChartOptions(theme),
+        plugins: {
+            ...getChartOptions(theme).plugins,
+            legend: {
+                display: false
+            }
+        },
+        scales: {
+            ...getChartOptions(theme).scales,
+            x: {
+                ...getChartOptions(theme).scales.x,
+                ticks: {
+                    ...getChartOptions(theme).scales.x.ticks,
+                    maxRotation: 0
+                }
+            }
+        }
+    };
+
+    return <Line data={data} options={options} />;
 }
 
+// Website Category Distribution
 export function CategoryDoughnutChart({
     categories = [],
     theme = 'dark'
@@ -111,21 +190,46 @@ export function CategoryDoughnutChart({
                 '#EC4899'
             ],
             borderColor: isDark ? '#17243A' : '#FFFFFF',
-            borderWidth: 3
+            borderWidth: 3,
+            hoverOffset: 8,
+            hoverBorderWidth: 3
         }]
     };
 
     const options = {
         responsive: true,
         maintainAspectRatio: false,
+        cutout: '68%',
+        animation: {
+            animateRotate: true,
+            duration: 700
+        },
         plugins: {
-            ...getChartOptions(theme).plugins,
             legend: {
                 position: 'bottom',
                 labels: {
                     color: isDark ? '#CBD5E1' : '#334155',
                     usePointStyle: true,
-                    padding: 16
+                    pointStyle: 'circle',
+                    padding: 18,
+                    font: {
+                        family: 'Inter',
+                        size: 12
+                    }
+                }
+            },
+            tooltip: {
+                backgroundColor: isDark ? '#17243A' : '#FFFFFF',
+                titleColor: isDark ? '#CBD5E1' : '#334155',
+                bodyColor: isDark ? '#CBD5E1' : '#334155',
+                borderColor: isDark ? '#334155' : '#CBD5E1',
+                borderWidth: 1,
+                padding: 12,
+                cornerRadius: 8,
+                callbacks: {
+                    label: (context) => {
+                        return ` ${context.label}: ${context.parsed} visits`;
+                    }
                 }
             }
         }
@@ -134,11 +238,16 @@ export function CategoryDoughnutChart({
     return <Doughnut data={data} options={options} />;
 }
 
-export function WebsiteBarChart({ websites = [], theme = 'dark' }) {
+// Most Visited Websites
+export function WebsiteBarChart({
+    websites = [],
+    theme = 'dark'
+}) {
     const data = {
         labels: websites.map(item => {
             try {
-                return new URL(item.website_url).hostname.replace(/^www\./, '');
+                return new URL(item.website_url)
+                    .hostname.replace(/^www\./, '');
             } catch {
                 return item.website_url;
             }
@@ -147,18 +256,47 @@ export function WebsiteBarChart({ websites = [], theme = 'dark' }) {
             label: 'Visits',
             data: websites.map(item => Number(item.total_visits)),
             backgroundColor: '#3B82F6',
-            borderRadius: 6
+            hoverBackgroundColor: '#60A5FA',
+            borderRadius: 6,
+            borderSkipped: false,
+            barPercentage: 0.7,
+            categoryPercentage: 0.8
         }]
     };
 
-    return (
-        <Bar
-            data={data}
-            options={getChartOptions(theme)}
-        />
-    );
+    const options = {
+        ...getChartOptions(theme),
+        plugins: {
+            ...getChartOptions(theme).plugins,
+            legend: {
+                display: false
+            },
+            tooltip: {
+                ...getChartOptions(theme).plugins.tooltip,
+                callbacks: {
+                    label: (context) => {
+                        return ` ${context.parsed.y} visits`;
+                    }
+                }
+            }
+        },
+        scales: {
+            ...getChartOptions(theme).scales,
+            x: {
+                ...getChartOptions(theme).scales.x,
+                ticks: {
+                    ...getChartOptions(theme).scales.x.ticks,
+                    maxRotation: 0,
+                    minRotation: 0
+                }
+            }
+        }
+    };
+
+    return <Bar data={data} options={options} />;
 }
 
+// Hourly Browsing Activity
 export function HourlyBarChart({
     hourly = [],
     hourlyWebsites = [],
@@ -178,7 +316,11 @@ export function HourlyBarChart({
             label: 'Total Visits',
             data: hourly.map(item => Number(item.total_visits)),
             backgroundColor: '#2563EB',
-            borderRadius: 6
+            hoverBackgroundColor: '#60A5FA',
+            borderRadius: 6,
+            borderSkipped: false,
+            barPercentage: 0.7,
+            categoryPercentage: 0.8
         }]
     };
 
@@ -186,6 +328,9 @@ export function HourlyBarChart({
         ...getChartOptions(theme),
         plugins: {
             ...getChartOptions(theme).plugins,
+            legend: {
+                display: false
+            },
             tooltip: {
                 ...getChartOptions(theme).plugins.tooltip,
                 callbacks: {
@@ -200,18 +345,18 @@ export function HourlyBarChart({
                             hourly[context[0].dataIndex]?.activity_hour
                         );
 
-                        const websites = hourlyWebsites.filter(
+                        const websitesAtHour = hourlyWebsites.filter(
                             item => Number(item.activity_hour) === selectedHour
                         );
 
-                        if (websites.length === 0) {
+                        if (websitesAtHour.length === 0) {
                             return ['No website details available.'];
                         }
 
                         return [
                             '',
                             'Websites:',
-                            ...websites.map(item => {
+                            ...websitesAtHour.map(item => {
                                 let websiteName = item.website_url;
 
                                 try {
@@ -226,6 +371,18 @@ export function HourlyBarChart({
                             })
                         ];
                     }
+                }
+            }
+        },
+        scales: {
+            ...getChartOptions(theme).scales,
+            x: {
+                ...getChartOptions(theme).scales.x,
+                ticks: {
+                    ...getChartOptions(theme).scales.x.ticks,
+                    maxRotation: 0,
+                    autoSkip: true,
+                    maxTicksLimit: 12
                 }
             }
         }
