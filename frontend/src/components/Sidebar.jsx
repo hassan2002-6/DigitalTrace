@@ -47,7 +47,7 @@ function Sidebar() {
                 </div>
 
                 <div>
-                    <h2>Footprint</h2>
+                    <h2>DigitalTrace</h2>
                     <span>Personal Dashboard</span>
                 </div>
             </div>

@@ -166,7 +166,7 @@ function Dashboard() {
             <div className="page-header">
                 <div>
                     <h1>Dashboard</h1>
-                    <p>Overview of your digital footprint</p>
+                    <p>Overview of your digital activity</p>
                 </div>
             </div>
 

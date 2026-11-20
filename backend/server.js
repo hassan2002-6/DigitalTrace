@@ -30,7 +30,7 @@ app.use('/api/history', historyRoutes);
 app.use('/api/analytics', analyticsRoutes);
 
 app.get('/', (req, res) => {
-    res.send('Personal Digital Footprint Dashboard API is running!');
+    res.send('DigitalTrace API is running!');
 });
 
 app.get('/api/health', (req, res) => {

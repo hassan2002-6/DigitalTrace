@@ -48,12 +48,12 @@ function Register() {
             <div className="auth-card">
                 <div className="auth-brand">
                     <ShieldCheck size={32} />
-                    <h2>Footprint</h2>
+                    <h2>DigitalTrace</h2>
                 </div>
 
                 <h1>Create Account</h1>
                 <p className="auth-subtitle">
-                    Create your personal digital footprint account.
+                    Create your DigitalTrace account.
                 </p>
 
                 {error && <div className="error-message">{error}</div>}

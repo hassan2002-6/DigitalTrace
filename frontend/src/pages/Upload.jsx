@@ -93,7 +93,7 @@ function Upload() {
                 <div>
                     <h1>Upload Browser History</h1>
                     <p>
-                        Import your browsing history to analyze your digital footprint.
+                        Import your browsing history to analyze your digital activity.
                     </p>
                 </div>
             </div>

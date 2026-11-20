@@ -53,7 +53,7 @@ function Login() {
             <div className="auth-card">
                 <div className="auth-brand">
                     <ShieldCheck size={32} />
-                    <h2>Footprint</h2>
+                    <h2>DigitalTrace</h2>
                 </div>
 
                 <h1>Welcome Back</h1>
