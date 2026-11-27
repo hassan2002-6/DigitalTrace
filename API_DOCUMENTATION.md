@@ -273,7 +273,7 @@ const response = await api.post('/history/upload', formData, {
 ```
 
 - **Backend processing:**
-  1. Multer stores the file in memory, 5 MB max, `.csv` only.
+  1. Multer stores the file in memory, 4 MB max, `.csv` only.
   2. `backend/services/csvParser.js` detects headers, parses timestamps, validates URLs and collects row errors.
   3. Transaction starts.
   4. Each hostname is inserted into `domains` with `ON CONFLICT (hostname) DO UPDATE`.

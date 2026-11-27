@@ -84,7 +84,7 @@ app.use((error, req, res, next) => {
 
         return res.status(statusCode).json({
             message: error.code === 'LIMIT_FILE_SIZE'
-                ? 'File size exceeds the 5 MB limit'
+                ? 'File size exceeds the 4 MB limit'
                 : 'File upload rejected'
         });
     }

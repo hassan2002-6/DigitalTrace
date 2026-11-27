@@ -19,7 +19,7 @@ Built with **React + Vite**, **Node.js + Express** and **PostgreSQL (Neon in pro
 | History | Server-side search, date filters, 25-row pagination, category and visit-count badges |
 | Analytics | Daily/weekly/monthly trend, category split, top domains, hourly activity, full domain breakdown table |
 | Profile | View account details, update display name, switch dark/light theme, log out |
-| Security | User-scoped queries, JWT middleware, login rate limiting, Helmet, CORS allow-list, 10 KB JSON limit, 5 MB CSV limit |
+| Security | User-scoped queries, JWT middleware, login rate limiting, Helmet, CORS allow-list, 10 KB JSON limit, 4 MB CSV limit |
 | Responsive UI | Desktop split-screen auth, mobile single-column auth, adaptive sidebar/navigation, responsive charts and tables |
 
 No dashboard statistic is hardcoded. Every number and chart is computed from PostgreSQL rows belonging to the signed-in user.
@@ -185,7 +185,7 @@ Accepted timestamps:
 
 Limits and rules:
 
-- `.csv` only, maximum **5 MB**, maximum **50,000 rows**.
+- `.csv` only, maximum **4 MB**, maximum **50,000 rows**.
 - `http://` / `https://` URLs only; invalid rows reject the whole file with row-level messages.
 - Imports are transactional — an upload either fully succeeds or leaves no partial data.
 - Exact duplicates are skipped and reported; uploading the same file twice imports nothing new.

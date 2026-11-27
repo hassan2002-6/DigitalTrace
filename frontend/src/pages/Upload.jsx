@@ -37,9 +37,9 @@ function Upload() {
             return;
         }
 
-        if (file.size > 5 * 1024 * 1024) {
+        if (file.size > 4 * 1024 * 1024) {
             setSelectedFile(null);
-            setError('File size must not exceed 5 MB.');
+            setError('File size must not exceed 4 MB.');
             event.target.value = '';
             return;
         }
@@ -149,7 +149,7 @@ function Upload() {
 
                         <strong>Choose a CSV file</strong>
 
-                        <span>Chrome/Edge CSV · Maximum size 5 MB</span>
+                        <span>Chrome/Edge CSV · Maximum size 4 MB</span>
 
                         <input
                             type="file"
