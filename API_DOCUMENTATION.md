@@ -1,7 +1,7 @@
 # API Documentation — DigitalTrace
 
 Base URL (local): `http://localhost:5000/api`
-Production: `https://<your-vercel-project>.vercel.app/api`
+Production: `https://digitaltrace-course.vercel.app/api`
 
 All endpoints are **internal APIs built in this repository**. There are no third-party API integrations. Chart.js is a drawing library, not an API.
 

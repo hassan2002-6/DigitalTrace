@@ -308,7 +308,7 @@ The parser collects errors with row numbers. The API returns `400` with `{ messa
 ## Part G — Deployment and workflow
 
 ### 45. How is the app deployed on Vercel?
-`vercel.json` builds `frontend/dist`, routes `/api/*` to `api/index.js` (which exports the Express app) and sends all other paths to `index.html` for React Router. Environment variables `DATABASE_URL`, `JWT_SECRET` and `CLIENT_ORIGIN` are set in the Vercel dashboard.
+`vercel.json` builds `frontend/dist`, routes `/api/*` to `api/index.js` (which exports the Express app) and sends all other paths to `index.html` for React Router. Environment variables `DATABASE_URL`, `JWT_SECRET` and `CLIENT_ORIGIN` are set in the Vercel dashboard. The live project is <https://digitaltrace-course.vercel.app>.
 
 ### 46. Why does `/api/index.js` exist?
 Vercel runs serverless functions. `api/index.js` requires `backend/app.js` and exports the Express app, so the same routes work locally and in production without duplicating backend code.

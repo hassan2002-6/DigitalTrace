@@ -4,7 +4,7 @@ A full-stack web application that turns a Chrome/Edge browser-history CSV export
 
 Built with **React + Vite**, **Node.js + Express** and **PostgreSQL (Neon in production)** for a Full Stack Development course project.
 
-> **Project status:** the application is complete and verified locally against PostgreSQL 17. The Neon and Vercel configuration is prepared; production deployment is pending account authorization (see [Deployment](#deployment)).
+> **Project status:** live in production at **https://digitaltrace-course.vercel.app** — React frontend, Express API and Neon PostgreSQL verified end to end.
 
 ---
 
@@ -231,7 +231,27 @@ A new Vercel project is prepared — separate from any other project on the acco
    - `/api/*` → `api/index.js`, all other routes → `index.html`
 5. Deploy, then verify `/api/health`, registration, login, CSV upload and analytics on the live URL.
 
-**No production deployment has been made yet.** It is intentionally blocked until the account authorization and deployment approval steps are completed.
+**Live URL:** <https://digitaltrace-course.vercel.app>
+
+Deployment verified on 27 November 2026:
+
+- `/api/health` → `database: connected`
+- registration and login through the live API
+- 320-row CSV upload through the live API
+- live dashboard showing 320 visits, 25 domains and 4 charts
+- SPA deep link `/login` returns the app shell
+- deleting the verification upload removed its 320 rows without affecting the demo account
+
+The project is a new Vercel project (`digitaltrace-course`) and does not share a project, domain or environment with any other application.
+
+Build settings come from `vercel.json`:
+
+- install: backend + frontend dependencies
+- build: `npm --prefix frontend run build`
+- output: `frontend/dist`
+- `/api/*` → `api/index.js`, all other routes → `index.html`
+
+Environment variables configured in Vercel: `DATABASE_URL` (Neon pooled), `JWT_SECRET`, `CLIENT_ORIGIN`.
 
 ---
 
