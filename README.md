@@ -216,7 +216,7 @@ Manual smoke checks used during development:
 
 ## Deployment (Vercel)
 
-A new Vercel project is prepared — separate from any other project on the account.
+The new Vercel project is live — separate from any other project on the account.
 
 1. Import the GitHub repository into Vercel.
 2. Framework preset: **Vite**; root directory: repository root.
@@ -252,6 +252,8 @@ Build settings come from `vercel.json`:
 - `/api/*` → `api/index.js`, all other routes → `index.html`
 
 Environment variables configured in Vercel: `DATABASE_URL` (Neon pooled), `JWT_SECRET`, `CLIENT_ORIGIN`.
+
+The current deployment was created with the Vercel CLI. To enable automatic deployments from the fork, install the Vercel GitHub App for `hassan2002-6/DigitalTrace` and connect it under **Project Settings → Git**.
 
 ---
 
