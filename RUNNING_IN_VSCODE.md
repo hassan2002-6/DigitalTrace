@@ -29,6 +29,24 @@ code .
 
 ---
 
+## Group members: stop here (shared database)
+
+If you are a group member, you do **not** need to create a Neon database, configure a backend, or create any `.env` file. All members share the database hosted by Hassan through the deployed API.
+
+From the `DigitalTrace` folder:
+
+```powershell
+cd frontend
+npm install
+npm run dev:shared
+```
+
+Open <http://localhost:5173> and register your own account. Use `npm run dev:shared`, not `npm run dev`.
+
+The rest of this guide is the **owner/full-stack path** for running the backend with direct database access.
+
+---
+
 ## 3. Create the Neon database
 
 1. Go to <https://neon.tech> and sign in.

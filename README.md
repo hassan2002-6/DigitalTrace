@@ -90,7 +90,34 @@ DigitalTrace/
 
 ---
 
-## Quick start
+## Run with the shared database (group members)
+
+All group members use the **same Neon database hosted by Hassan**. You do **not** create a Neon account, run a backend, or receive a database password.
+
+The Vite dev server proxies `/api` to the deployed Express API. That server holds the Neon connection string in Vercel environment variables, so the browser and the repository never see database credentials.
+
+**You need:** Git, Node.js 18+ and VS Code.
+
+```powershell
+git clone https://github.com/hassan2002-6/DigitalTrace.git
+cd DigitalTrace\frontend
+npm install
+npm run dev:shared
+```
+
+Open <http://localhost:5173>, register your own account, and upload `public/sample-browser-history.csv`.
+
+- Your account only sees its own uploads; other members’ data is filtered by user ID.
+- **No `.env` file is needed.** Do not create `backend/.env` and do not ask for the Neon connection string.
+- Use `npm run dev:shared`, not `npm run dev` — the normal command expects a local API on port 5000.
+- From the repository root, `npm run dev:members` does the same thing.
+- Press `Ctrl+C` to stop the server.
+
+---
+
+## Full-stack setup (owner / advanced)
+
+Use this path only if you own the Neon project or have been given its connection strings privately. Never commit `backend/.env`.
 
 ### 1. Create a Neon database
 
@@ -156,6 +183,7 @@ Create the database once with `createdb digitaltrace`, then run `npm run db:migr
 npm run install:all     # backend + frontend dependencies
 npm run dev:backend
 npm run dev:frontend
+npm run dev:members      # frontend only, shared database
 npm run db:migrate
 npm test
 npm run build
