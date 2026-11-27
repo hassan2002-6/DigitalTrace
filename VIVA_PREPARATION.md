@@ -317,7 +317,7 @@ Vercel runs serverless functions. `api/index.js` requires `backend/app.js` and e
 They keep secrets and per-environment settings out of Git: database URL, JWT secret and allowed frontend origin. `.env` is ignored; `.env.example` documents the names with placeholders.
 
 ### 48. What is the Git workflow?
-Work is committed to the fork `hassan2002-6/DigitalTrace`, not the original owner’s repository. The original is kept as an `upstream` remote with pushes disabled. Commit messages describe the change; secrets are checked before every push.
+Work is committed to the independent public repository `hassan2002-6/DigitalTrace`. The original Mayur repository is kept only as a local `upstream` reference with pushes disabled; the GitHub project has no fork parent. Commit messages describe the change; secrets are checked before every push.
 
 ### 49. What was the hardest part?
 Three things:

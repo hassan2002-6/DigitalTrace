@@ -253,7 +253,7 @@ Build settings come from `vercel.json`:
 
 Environment variables configured in Vercel: `DATABASE_URL` (Neon pooled), `JWT_SECRET`, `CLIENT_ORIGIN`.
 
-The current deployment was created with the Vercel CLI. To enable automatic deployments from the fork, install the Vercel GitHub App for `hassan2002-6/DigitalTrace` and connect it under **Project Settings → Git**.
+The current deployment was created with the Vercel CLI. To enable automatic deployments from the repository, install the Vercel GitHub App for `hassan2002-6/DigitalTrace` and connect it under **Project Settings → Git**.
 
 ---
 

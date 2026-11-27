@@ -19,7 +19,7 @@ If `code` is not recognised, open VS Code → `Ctrl+Shift+P` → “Shell Comman
 
 ## 2. Get the repository
 
-The repository is private, so your GitHub account must be added as a collaborator first.
+The repository is public, so you can clone it directly — no collaborator invitation is needed.
 
 ```powershell
 git clone https://github.com/hassan2002-6/DigitalTrace.git
@@ -197,4 +197,4 @@ Restart both dev servers.
 - Never commit `backend/.env` or `frontend/.env`.
 - Never paste the Neon connection string into chat, email or a screenshot.
 - Do not run `npm run db:migrate` against a database you do not own.
-- Keep the repository fork/remote you were given; do not push to the original owner’s repository.
+- Commit to your own repository; do not push to another team’s or the original owner’s repository.
