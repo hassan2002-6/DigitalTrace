@@ -11,6 +11,16 @@ export const getBrowsingActivity = async (params = {}) => {
     return response.data;
 };
 
+export const getDomains = async (params = {}) => {
+    const response = await api.get('/analytics/domains', { params });
+    return response.data;
+};
+
+export const getRecentActivity = async (params = {}) => {
+    const response = await api.get('/analytics/recent', { params });
+    return response.data;
+};
+
 export const getWebsiteCategories = async (params = {}) => {
     const response = await api.get('/analytics/categories', { params });
     return response.data;

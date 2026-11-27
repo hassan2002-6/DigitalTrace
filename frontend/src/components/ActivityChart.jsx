@@ -116,19 +116,39 @@ const getChartOptions = (theme) => {
 // Daily Browsing Activity
 export function ActivityLineChart({
     activity = [],
-    theme = 'dark'
+    theme = 'dark',
+    period = 'daily'
 }) {
     const data = {
         labels: activity.map(item => {
-            const date = new Date(`${item.activity_date}T00:00:00`);
+            const bucket = item.bucket || item.activity_date;
+            const date = new Date(`${bucket}T00:00:00Z`);
 
-            return Number.isNaN(date.getTime())
-                ? item.activity_date
-                : date.toLocaleDateString('en-US', {
+            if (Number.isNaN(date.getTime())) {
+                return bucket;
+            }
+
+            if (period === 'monthly') {
+                return date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    year: 'numeric',
+                    timeZone: 'UTC'
+                });
+            }
+
+            if (period === 'weekly') {
+                return `Wk ${date.toLocaleDateString('en-US', {
                     month: 'short',
                     day: 'numeric',
                     timeZone: 'UTC'
-                });
+                })}`;
+            }
+
+            return date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                timeZone: 'UTC'
+            });
         }),
         datasets: [{
             label: 'Website Visits',

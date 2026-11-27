@@ -9,8 +9,10 @@ const fileFilter = (req, file, cb) => {
 
     const allowedMimeTypes = [
         'text/csv',
+        'text/plain',
+        'application/csv',
         'application/vnd.ms-excel',
-        'application/csv'
+        'application/octet-stream'
     ];
 
     if (

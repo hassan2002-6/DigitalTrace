@@ -1,63 +1,67 @@
-
 const express = require('express');
 const router = express.Router();
 
 const db = require('../config/db');
 const authMiddleware = require('../middleware/authMiddleware');
-const getDateFilter = require('../utils/dateFilter');
+const { buildDateFilter } = require('../utils/dateFilterPg');
+
+const PERIODS = new Set(['daily', 'weekly', 'monthly']);
+const PERIOD_UNITS = {
+    daily: 'day',
+    weekly: 'week',
+    monthly: 'month'
+};
+
+function getPeriod(value) {
+    return PERIODS.has(value) ? value : 'daily';
+}
+
+function whereFor(req, startIndex = 2) {
+    const { conditions, values } = buildDateFilter(req.query, startIndex);
+
+    return {
+        sql: ['bh.user_id = $1', ...conditions].join(' AND '),
+        values: [req.user.id, ...values]
+    };
+}
 
 // Get dashboard summary
 router.get('/summary', authMiddleware, async (req, res) => {
     try {
-        const { condition, values } = getDateFilter(req.query);
-        const params = [req.user.id, ...values];
+        const where = whereFor(req);
 
-        const [visits] = await db.query(
-            `SELECT COUNT(*) AS total_visits
+        const totalsResult = await db.query(
+            `SELECT
+                COALESCE(SUM(bh.visit_count), 0)::int AS total_visits,
+                COUNT(DISTINCT bh.domain_id)::int AS unique_websites
              FROM browser_history bh
-             INNER JOIN uploaded_files uf
-             ON bh.upload_id = uf.id
-             WHERE uf.user_id = ? ${condition}`,
-            params
+             WHERE ${where.sql}`,
+            where.values
         );
 
-        const [websites] = await db.query(
-            `SELECT COUNT(DISTINCT bh.website_url) AS unique_websites
-             FROM browser_history bh
-             INNER JOIN uploaded_files uf
-             ON bh.upload_id = uf.id
-             WHERE uf.user_id = ? ${condition}`,
-            params
-        );
-
-        const [files] = await db.query(
-            `SELECT COUNT(*) AS total_files
-             FROM uploaded_files
-             WHERE user_id = ?`,
+        const filesResult = await db.query(
+            'SELECT COUNT(*)::int AS total_files FROM uploaded_files WHERE user_id = $1',
             [req.user.id]
         );
 
-        const [popular] = await db.query(
+        const popularResult = await db.query(
             `SELECT
-                bh.website_url,
-                COUNT(*) AS total_visits
+                d.hostname AS website_url,
+                COALESCE(SUM(bh.visit_count), 0)::int AS total_visits
              FROM browser_history bh
-             INNER JOIN uploaded_files uf
-             ON bh.upload_id = uf.id
-             WHERE uf.user_id = ? ${condition}
-             GROUP BY bh.website_url
-             ORDER BY total_visits DESC, bh.website_url ASC
+             INNER JOIN domains d ON bh.domain_id = d.id
+             WHERE ${where.sql}
+             GROUP BY d.hostname
+             ORDER BY total_visits DESC, d.hostname ASC
              LIMIT 1`,
-            params
+            where.values
         );
 
         res.json({
-            total_visits: visits[0].total_visits,
-            unique_websites: websites[0].unique_websites,
-            total_files: files[0].total_files,
-            most_visited_website: popular.length > 0
-                ? popular[0]
-                : null
+            total_visits: totalsResult.rows[0].total_visits,
+            unique_websites: totalsResult.rows[0].unique_websites,
+            total_files: filesResult.rows[0].total_files,
+            most_visited_website: popularResult.rows[0] || null
         });
 
     } catch (error) {
@@ -67,27 +71,25 @@ router.get('/summary', authMiddleware, async (req, res) => {
     }
 });
 
-// Get visits by website category
+// Visits per category
 router.get('/categories', authMiddleware, async (req, res) => {
     try {
-        const { condition, values } = getDateFilter(req.query);
+        const where = whereFor(req);
 
-        const [categories] = await db.query(
+        const result = await db.query(
             `SELECT
-                wc.category_name,
-                COUNT(bh.id) AS total_visits
+                COALESCE(wc.category_name, 'Uncategorized') AS category_name,
+                COALESCE(SUM(bh.visit_count), 0)::int AS total_visits
              FROM browser_history bh
-             INNER JOIN uploaded_files uf
-                ON bh.upload_id = uf.id
-             LEFT JOIN website_categories wc
-                ON bh.category_id = wc.id
-             WHERE uf.user_id = ? ${condition}
-             GROUP BY wc.category_name
-             ORDER BY total_visits DESC`,
-            [req.user.id, ...values]
+             LEFT JOIN domains d ON bh.domain_id = d.id
+             LEFT JOIN website_categories wc ON d.category_id = wc.id
+             WHERE ${where.sql}
+             GROUP BY COALESCE(wc.category_name, 'Uncategorized')
+             ORDER BY total_visits DESC, category_name ASC`,
+            where.values
         );
 
-        res.json(categories);
+        res.json(result.rows);
 
     } catch (error) {
         res.status(400).json({
@@ -96,25 +98,24 @@ router.get('/categories', authMiddleware, async (req, res) => {
     }
 });
 
-// Get most visited websites
+// Most visited websites (domain level)
 router.get('/websites', authMiddleware, async (req, res) => {
     try {
-        const { condition, values } = getDateFilter(req.query);
+        const where = whereFor(req);
 
-        const [websites] = await db.query(
+        const result = await db.query(
             `SELECT
-                bh.website_url,
-                COUNT(*) AS total_visits
+                d.hostname AS website_url,
+                COALESCE(SUM(bh.visit_count), 0)::int AS total_visits
              FROM browser_history bh
-             INNER JOIN uploaded_files uf
-                ON bh.upload_id = uf.id
-             WHERE uf.user_id = ? ${condition}
-             GROUP BY bh.website_url
-             ORDER BY total_visits DESC, bh.website_url ASC`,
-            [req.user.id, ...values]
+             INNER JOIN domains d ON bh.domain_id = d.id
+             WHERE ${where.sql}
+             GROUP BY d.hostname
+             ORDER BY total_visits DESC, d.hostname ASC`,
+            where.values
         );
 
-        res.json(websites);
+        res.json(result.rows);
 
     } catch (error) {
         res.status(400).json({
@@ -123,25 +124,57 @@ router.get('/websites', authMiddleware, async (req, res) => {
     }
 });
 
-// Get daily browsing activity
-router.get('/activity', authMiddleware, async (req, res) => {
+// Domain breakdown with category and unique URL counts
+router.get('/domains', authMiddleware, async (req, res) => {
     try {
-        const { condition, values } = getDateFilter(req.query);
+        const where = whereFor(req);
 
-        const [activity] = await db.query(
+        const result = await db.query(
             `SELECT
-                DATE_FORMAT(bh.visit_time, '%Y-%m-%d') AS activity_date,
-                COUNT(*) AS total_visits
+                d.hostname,
+                COALESCE(wc.category_name, 'Uncategorized') AS category_name,
+                COUNT(DISTINCT bh.website_url)::int AS unique_urls,
+                COALESCE(SUM(bh.visit_count), 0)::int AS total_visits
              FROM browser_history bh
-             INNER JOIN uploaded_files uf
-                ON bh.upload_id = uf.id
-             WHERE uf.user_id = ? ${condition}
-             GROUP BY DATE_FORMAT(bh.visit_time, '%Y-%m-%d')
-             ORDER BY activity_date ASC`,
-            [req.user.id, ...values]
+             INNER JOIN domains d ON bh.domain_id = d.id
+             LEFT JOIN website_categories wc ON d.category_id = wc.id
+             WHERE ${where.sql}
+             GROUP BY d.hostname, wc.category_name
+             ORDER BY total_visits DESC, d.hostname ASC`,
+            where.values
         );
 
-        res.json(activity);
+        res.json(result.rows);
+
+    } catch (error) {
+        res.status(400).json({
+            message: error.message || 'Error fetching domain analytics'
+        });
+    }
+});
+
+// Daily, weekly or monthly activity
+router.get('/activity', authMiddleware, async (req, res) => {
+    try {
+        const period = getPeriod(req.query.period);
+        const unit = PERIOD_UNITS[period];
+        const where = whereFor(req);
+
+        const result = await db.query(
+            `SELECT
+                to_char(date_trunc($${where.values.length + 1}::text, bh.visit_time), 'YYYY-MM-DD') AS bucket,
+                COALESCE(SUM(bh.visit_count), 0)::int AS total_visits
+             FROM browser_history bh
+             WHERE ${where.sql}
+             GROUP BY 1
+             ORDER BY 1 ASC`,
+            [...where.values, unit]
+        );
+
+        res.json({
+            period,
+            buckets: result.rows
+        });
 
     } catch (error) {
         res.status(400).json({
@@ -150,25 +183,23 @@ router.get('/activity', authMiddleware, async (req, res) => {
     }
 });
 
-// Get hourly browsing activity
+// Visits per hour of day
 router.get('/hourly', authMiddleware, async (req, res) => {
     try {
-        const { condition, values } = getDateFilter(req.query);
+        const where = whereFor(req);
 
-        const [activity] = await db.query(
+        const result = await db.query(
             `SELECT
-                HOUR(bh.visit_time) AS activity_hour,
-                COUNT(*) AS total_visits
+                EXTRACT(HOUR FROM bh.visit_time)::int AS activity_hour,
+                COALESCE(SUM(bh.visit_count), 0)::int AS total_visits
              FROM browser_history bh
-             INNER JOIN uploaded_files uf
-                ON bh.upload_id = uf.id
-             WHERE uf.user_id = ? ${condition}
-             GROUP BY HOUR(bh.visit_time)
-             ORDER BY activity_hour ASC`,
-            [req.user.id, ...values]
+             WHERE ${where.sql}
+             GROUP BY 1
+             ORDER BY 1 ASC`,
+            where.values
         );
 
-        res.json(activity);
+        res.json(result.rows);
 
     } catch (error) {
         res.status(400).json({
@@ -177,30 +208,66 @@ router.get('/hourly', authMiddleware, async (req, res) => {
     }
 });
 
-// Get website-wise visits for each hour
+// Per-hour, per-website breakdown
 router.get('/hourly-websites', authMiddleware, async (req, res) => {
     try {
-        const { condition, values } = getDateFilter(req.query);
+        const where = whereFor(req);
 
-        const [websites] = await db.query(
+        const result = await db.query(
             `SELECT
-                HOUR(bh.visit_time) AS activity_hour,
-                bh.website_url,
-                COUNT(*) AS total_visits
+                EXTRACT(HOUR FROM bh.visit_time)::int AS activity_hour,
+                d.hostname AS website_url,
+                COALESCE(SUM(bh.visit_count), 0)::int AS total_visits
              FROM browser_history bh
-             INNER JOIN uploaded_files uf
-                ON bh.upload_id = uf.id
-             WHERE uf.user_id = ? ${condition}
-             GROUP BY HOUR(bh.visit_time), bh.website_url
-             ORDER BY activity_hour ASC, total_visits DESC`,
-            [req.user.id, ...values]
+             INNER JOIN domains d ON bh.domain_id = d.id
+             WHERE ${where.sql}
+             GROUP BY 1, 2
+             ORDER BY 1 ASC, total_visits DESC`,
+            where.values
         );
 
-        res.json(websites);
+        res.json(result.rows);
 
     } catch (error) {
         res.status(400).json({
             message: error.message || 'Error fetching hourly website analytics'
+        });
+    }
+});
+
+// Recent browsing activity
+router.get('/recent', authMiddleware, async (req, res) => {
+    try {
+        const requested = Number.parseInt(req.query.limit, 10);
+        const limit = Number.isInteger(requested) && requested > 0
+            ? Math.min(requested, 20)
+            : 5;
+
+        const result = await db.query(
+            `SELECT
+                bh.id,
+                bh.website_url,
+                bh.page_title,
+                bh.visit_time,
+                bh.visit_count,
+                d.hostname,
+                COALESCE(wc.category_name, 'Uncategorized') AS category_name
+             FROM browser_history bh
+             LEFT JOIN domains d ON bh.domain_id = d.id
+             LEFT JOIN website_categories wc ON d.category_id = wc.id
+             WHERE bh.user_id = $1
+             ORDER BY bh.visit_time DESC, bh.id DESC
+             LIMIT $2`,
+            [req.user.id, limit]
+        );
+
+        res.json(result.rows);
+
+    } catch (error) {
+        console.error('Recent activity error:', error.message);
+
+        res.status(500).json({
+            message: 'Error fetching recent activity'
         });
     }
 });

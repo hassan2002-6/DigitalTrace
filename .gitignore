@@ -4,12 +4,15 @@ node_modules/
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # Log files
 *.log
 
 # Temporary files
 *.tmp
+# Vercel
+.vercel
 # Temporary test files
 backend/*_test.csv
 backend/*_test.txt

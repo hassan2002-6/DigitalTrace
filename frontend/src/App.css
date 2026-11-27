@@ -342,6 +342,62 @@
     line-height: 1.7;
 }
 
+.upload-format {
+    max-width: 540px;
+    margin: 22px auto 4px;
+    padding: 16px 18px;
+    background: #0F2744;
+    border: 1px solid #1E3A5F;
+    border-radius: 10px;
+    text-align: left;
+}
+
+.upload-format h3 {
+    margin: 0 0 8px;
+    font-size: 12px;
+    color: #F8FAFC;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.upload-format p {
+    margin: 0 0 8px;
+    color: #94A3B8;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.upload-format p:last-child {
+    margin-bottom: 0;
+}
+
+.upload-format code {
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: #1E293B;
+    color: #93C5FD;
+    font-size: 11px;
+}
+
+.upload-format a {
+    color: #60A5FA;
+    font-weight: 600;
+}
+
+html[data-theme="light"] .upload-format {
+    background: #F1F5F9;
+    border-color: #CBD5E1;
+}
+
+html[data-theme="light"] .upload-format h3 {
+    color: #0F172A;
+}
+
+html[data-theme="light"] .upload-format code {
+    background: #E2E8F0;
+    color: #1D4ED8;
+}
+
 .upload-dropzone {
     margin: 25px auto;
     max-width: 500px;
@@ -448,9 +504,11 @@
     }
 
     .sidebar-nav {
-        flex-direction: row;
-        overflow-x: auto;
-        padding-bottom: 8px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        overflow: visible;
+        padding-bottom: 0;
     }
 
     .sidebar-heading,
@@ -461,9 +519,10 @@
     .nav-link {
         flex-direction: column;
         gap: 5px;
-        min-width: 75px;
-        padding: 10px 7px;
+        min-width: 0;
+        padding: 10px 6px;
         font-size: 10px;
+        text-align: center;
     }
 
     .main-content {
@@ -1324,6 +1383,25 @@ html[data-theme="light"] .history-empty p {
 .error-message svg,
 .success-message svg {
     flex-shrink: 0;
+}
+
+.upload-errors {
+    max-width: 540px;
+    margin: -6px auto 12px;
+    padding: 10px 15px 10px 32px;
+    background: #3F1D1D;
+    border: 1px solid #7F1D1D;
+    border-radius: 9px;
+    color: #FCA5A5;
+    font-size: 11.5px;
+    line-height: 1.7;
+    text-align: left;
+}
+
+html[data-theme="light"] .upload-errors {
+    background: #FEF2F2;
+    border-color: #FECACA;
+    color: #B91C1C;
 }
 
 /* Privacy Information */

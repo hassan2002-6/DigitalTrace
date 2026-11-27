@@ -1,13 +1,15 @@
-
 import { useEffect, useState } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 
 import {
     Activity,
-    Globe,
-    FileUp,
+    ArrowUpRight,
+    CalendarDays,
     Clock,
-    CalendarDays
+    FileUp,
+    Globe,
+    History,
+    TrendingUp
 } from 'lucide-react';
 
 import {
@@ -23,8 +25,30 @@ import {
     getWebsiteCategories,
     getTopWebsites,
     getHourlyActivity,
-    getHourlyWebsiteBreakdown
+    getHourlyWebsiteBreakdown,
+    getRecentActivity
 } from '../services/analyticsService';
+
+const PERIODS = [
+    { value: 'daily', label: 'Daily' },
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'monthly', label: 'Monthly' }
+];
+
+function formatVisitTime(value) {
+    const date = new Date(String(value).replace(' ', 'T'));
+
+    if (Number.isNaN(date.getTime())) {
+        return 'Unknown time';
+    }
+
+    return date.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
 
 function Dashboard() {
     const { theme } = useOutletContext();
@@ -35,10 +59,12 @@ function Dashboard() {
     const [websites, setWebsites] = useState([]);
     const [hourly, setHourly] = useState([]);
     const [hourlyWebsites, setHourlyWebsites] = useState([]);
+    const [recent, setRecent] = useState([]);
+
+    const [period, setPeriod] = useState('daily');
 
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-
     const [appliedDates, setAppliedDates] = useState({
         startDate: '',
         endDate: ''
@@ -48,12 +74,14 @@ function Dashboard() {
     const [error, setError] = useState('');
 
     useEffect(() => {
+        let cancelled = false;
+
         const fetchDashboardData = async () => {
             try {
                 setLoading(true);
                 setError('');
 
-                const params = {};
+                const params = { period };
 
                 if (appliedDates.startDate) {
                     params.startDate = appliedDates.startDate;
@@ -69,35 +97,50 @@ function Dashboard() {
                     categoryData,
                     websiteData,
                     hourlyData,
-                    hourlyWebsiteData
+                    hourlyWebsiteData,
+                    recentData
                 ] = await Promise.all([
                     getDashboardSummary(params),
                     getBrowsingActivity(params),
                     getWebsiteCategories(params),
                     getTopWebsites(params),
                     getHourlyActivity(params),
-                    getHourlyWebsiteBreakdown(params)
+                    getHourlyWebsiteBreakdown(params),
+                    getRecentActivity({ limit: 5 })
                 ]);
 
+                if (cancelled) {
+                    return;
+                }
+
                 setSummary(summaryData);
-                setActivity(activityData);
+                setActivity(activityData.buckets || []);
                 setCategories(categoryData);
                 setWebsites(websiteData);
                 setHourly(hourlyData);
                 setHourlyWebsites(hourlyWebsiteData);
+                setRecent(recentData);
 
             } catch (err) {
-                setError(
-                    err.response?.data?.message ||
-                    'Unable to load dashboard data.'
-                );
+                if (!cancelled) {
+                    setError(
+                        err.response?.data?.message ||
+                        'Unable to load dashboard data.'
+                    );
+                }
             } finally {
-                setLoading(false);
+                if (!cancelled) {
+                    setLoading(false);
+                }
             }
         };
 
         fetchDashboardData();
-    }, [appliedDates]);
+
+        return () => {
+            cancelled = true;
+        };
+    }, [appliedDates, period]);
 
     const handleApplyFilter = () => {
         if (startDate && endDate && startDate > endDate) {
@@ -105,33 +148,16 @@ function Dashboard() {
             return;
         }
 
-        setAppliedDates({
-            startDate,
-            endDate
-        });
+        setAppliedDates({ startDate, endDate });
     };
 
     const handleResetFilter = () => {
         setStartDate('');
         setEndDate('');
-
-        setAppliedDates({
-            startDate: '',
-            endDate: ''
-        });
+        setAppliedDates({ startDate: '', endDate: '' });
     };
 
-    const mostVisitedWebsite = summary?.most_visited_website?.website_url
-        ? (() => {
-            try {
-                return new URL(
-                    summary.most_visited_website.website_url
-                ).hostname.replace(/^www\./, '');
-            } catch {
-                return summary.most_visited_website.website_url;
-            }
-        })()
-        : 'No data';
+    const mostVisitedWebsite = summary?.most_visited_website?.website_url || 'No data';
 
     const stats = [
         {
@@ -144,7 +170,7 @@ function Dashboard() {
             title: 'Unique Websites',
             value: summary?.unique_websites ?? '—',
             icon: Globe,
-            description: 'Different websites visited'
+            description: 'Distinct domains visited'
         },
         {
             title: 'Total Uploads',
@@ -153,10 +179,10 @@ function Dashboard() {
             description: 'History files uploaded'
         },
         {
-            title: 'Most Visited Website',
+            title: 'Most Visited',
             value: mostVisitedWebsite,
-            icon: Clock,
-            description: 'Your most frequently visited site'
+            icon: TrendingUp,
+            description: 'Your top website by visits'
         }
     ];
 
@@ -168,6 +194,11 @@ function Dashboard() {
                     <h1>Dashboard</h1>
                     <p>Overview of your digital activity</p>
                 </div>
+
+                <Link to="/upload" className="header-action">
+                    <FileUp size={16} />
+                    Upload history
+                </Link>
             </div>
 
             <div className="date-filter-panel">
@@ -225,9 +256,7 @@ function Dashboard() {
             </div>
 
             {error && (
-                <div className="error-message">
-                    {error}
-                </div>
+                <div className="error-message">{error}</div>
             )}
 
             <div className="stats-grid">
@@ -255,11 +284,24 @@ function Dashboard() {
 
             <div className="dashboard-grid">
 
-                <div className="chart-panel">
+                <div className="chart-panel chart-panel--wide">
                     <div className="panel-header">
                         <div>
                             <h3>Browsing Activity</h3>
-                            <p>Website visits by date</p>
+                            <p>Website visits by {period.replace('ly', '')}</p>
+                        </div>
+
+                        <div className="period-toggle" role="group" aria-label="Activity period">
+                            {PERIODS.map((option) => (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    className={period === option.value ? 'active' : ''}
+                                    onClick={() => setPeriod(option.value)}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
@@ -269,6 +311,7 @@ function Dashboard() {
                         ) : activity.length > 0 ? (
                             <ActivityLineChart
                                 activity={activity}
+                                period={period}
                                 theme={theme}
                             />
                         ) : (
@@ -303,7 +346,7 @@ function Dashboard() {
                     <div className="panel-header">
                         <div>
                             <h3>Top Websites</h3>
-                            <p>Most frequently visited websites</p>
+                            <p>Most frequently visited domains</p>
                         </div>
                     </div>
 
@@ -345,6 +388,56 @@ function Dashboard() {
                 </div>
 
             </div>
+
+            <div className="chart-panel recent-panel">
+                <div className="panel-header">
+                    <div>
+                        <h3>Recent Activity</h3>
+                        <p>Your latest five recorded visits</p>
+                    </div>
+
+                    <Link to="/history" className="panel-link">
+                        <History size={15} />
+                        View all
+                    </Link>
+                </div>
+
+                {loading ? (
+                    <p>Loading recent activity...</p>
+                ) : recent.length === 0 ? (
+                    <p>No recent activity yet. Upload a CSV to get started.</p>
+                ) : (
+                    <ul className="recent-list">
+                        {recent.map((item) => (
+                            <li key={item.id} className="recent-item">
+                                <span className="recent-icon">
+                                    <Globe size={16} />
+                                </span>
+
+                                <div className="recent-main">
+                                    <strong>{item.hostname || item.website_url}</strong>
+                                    <span>{item.page_title || 'Untitled page'}</span>
+                                </div>
+
+                                <span className="recent-category">
+                                    {item.category_name}
+                                </span>
+
+                                <span className="recent-time">
+                                    <Clock size={13} />
+                                    {formatVisitTime(item.visit_time)}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+
+                <Link to="/history" className="recent-footer">
+                    Search the full history
+                    <ArrowUpRight size={14} />
+                </Link>
+            </div>
+
         </div>
     );
 }

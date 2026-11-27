@@ -1,5 +1,4 @@
-
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
     History,
@@ -7,18 +6,28 @@ import {
     CalendarDays,
     Globe,
     Filter,
-    RefreshCw
+    RefreshCw,
+    ChevronLeft,
+    ChevronRight
 } from 'lucide-react';
 
 import { getBrowsingHistory } from '../services/historyService';
 
+const PAGE_SIZE = 25;
+
 function HistoryPage() {
-    const [history, setHistory] = useState([]);
+    const [records, setRecords] = useState([]);
+    const [pagination, setPagination] = useState({
+        page: 1,
+        limit: PAGE_SIZE,
+        total: 0,
+        totalPages: 1
+    });
 
     const [searchTerm, setSearchTerm] = useState('');
+    const [debouncedSearch, setDebouncedSearch] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-
     const [appliedDates, setAppliedDates] = useState({
         startDate: '',
         endDate: ''
@@ -27,14 +36,32 @@ function HistoryPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
-    // Fetch browsing history
+    // Debounce the search box so typing does not fire a request per key.
     useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchTerm.trim());
+            setPagination((current) => ({ ...current, page: 1 }));
+        }, 350);
+
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
+
+    useEffect(() => {
+        let cancelled = false;
+
         const fetchHistory = async () => {
             try {
                 setLoading(true);
                 setError('');
 
-                const params = {};
+                const params = {
+                    page: pagination.page,
+                    limit: PAGE_SIZE
+                };
+
+                if (debouncedSearch) {
+                    params.search = debouncedSearch;
+                }
 
                 if (appliedDates.startDate) {
                     params.startDate = appliedDates.startDate;
@@ -46,22 +73,31 @@ function HistoryPage() {
 
                 const data = await getBrowsingHistory(params);
 
-                setHistory(data);
-
+                if (!cancelled) {
+                    setRecords(data.records || []);
+                    setPagination(data.pagination);
+                }
             } catch (err) {
-                setError(
-                    err.response?.data?.message ||
-                    'Unable to load browsing history. Please try again.'
-                );
+                if (!cancelled) {
+                    setError(
+                        err.response?.data?.message ||
+                        'Unable to load browsing history. Please try again.'
+                    );
+                }
             } finally {
-                setLoading(false);
+                if (!cancelled) {
+                    setLoading(false);
+                }
             }
         };
 
         fetchHistory();
-    }, [appliedDates]);
 
-    // Apply date filter
+        return () => {
+            cancelled = true;
+        };
+    }, [pagination.page, appliedDates, debouncedSearch]);
+
     const handleApplyFilter = () => {
         if (startDate && endDate && startDate > endDate) {
             setError('Start date cannot be after end date.');
@@ -69,43 +105,27 @@ function HistoryPage() {
         }
 
         setError('');
-
-        setAppliedDates({
-            startDate,
-            endDate
-        });
+        setPagination((current) => ({ ...current, page: 1 }));
+        setAppliedDates({ startDate, endDate });
     };
 
-    // Reset filters
     const handleResetFilter = () => {
         setStartDate('');
         setEndDate('');
         setSearchTerm('');
-
-        setAppliedDates({
-            startDate: '',
-            endDate: ''
-        });
-
         setError('');
+        setPagination((current) => ({ ...current, page: 1 }));
+        setAppliedDates({ startDate: '', endDate: '' });
     };
 
-    // Search by website, page title or category
-    const filteredHistory = useMemo(() => {
-        const search = searchTerm.toLowerCase().trim();
-
-        if (!search) {
-            return history;
+    const goToPage = (nextPage) => {
+        if (nextPage < 1 || nextPage > pagination.totalPages) {
+            return;
         }
 
-        return history.filter(item =>
-            (item.website_url || '').toLowerCase().includes(search) ||
-            (item.page_title || '').toLowerCase().includes(search) ||
-            (item.category_name || '').toLowerCase().includes(search)
-        );
-    }, [history, searchTerm]);
+        setPagination((current) => ({ ...current, page: nextPage }));
+    };
 
-    // Format website URL
     const getWebsiteName = (url) => {
         try {
             return new URL(url).hostname.replace(/^www\./, '');
@@ -114,9 +134,8 @@ function HistoryPage() {
         }
     };
 
-    // Format visit date and time
     const formatVisitTime = (value) => {
-        const date = new Date(value);
+        const date = new Date(String(value).replace(' ', 'T'));
 
         if (Number.isNaN(date.getTime())) {
             return 'Invalid date';
@@ -134,17 +153,13 @@ function HistoryPage() {
     return (
         <div className="page-container">
 
-            {/* Page Header */}
             <div className="page-header">
                 <div>
                     <h1>Browsing History</h1>
-                    <p>
-                        View and explore your uploaded browsing records.
-                    </p>
+                    <p>View and explore your uploaded browsing records.</p>
                 </div>
             </div>
 
-            {/* History Toolbar */}
             <div className="history-panel">
 
                 <div className="history-toolbar">
@@ -165,21 +180,16 @@ function HistoryPage() {
                         <span>
                             {loading
                                 ? 'Loading records...'
-                                : `${filteredHistory.length} records`
-                            }
+                                : `${pagination.total} records`}
                         </span>
                     </div>
 
                 </div>
 
-                {/* Date Filters */}
                 <div className="history-filters">
 
                     <div className="date-filter-input">
-                        <label htmlFor="history-start-date">
-                            Start Date
-                        </label>
-
+                        <label htmlFor="history-start-date">Start Date</label>
                         <input
                             id="history-start-date"
                             type="date"
@@ -190,10 +200,7 @@ function HistoryPage() {
                     </div>
 
                     <div className="date-filter-input">
-                        <label htmlFor="history-end-date">
-                            End Date
-                        </label>
-
+                        <label htmlFor="history-end-date">End Date</label>
                         <input
                             id="history-end-date"
                             type="date"
@@ -204,7 +211,6 @@ function HistoryPage() {
                     </div>
 
                     <div className="history-filter-actions">
-
                         <button
                             type="button"
                             className="primary-button"
@@ -224,35 +230,24 @@ function HistoryPage() {
                             <RefreshCw size={15} />
                             Reset
                         </button>
-
                     </div>
 
                 </div>
 
-                {/* Error Message */}
                 {error && (
-                    <div className="error-message">
-                        {error}
-                    </div>
+                    <div className="error-message">{error}</div>
                 )}
 
-                {/* Loading State */}
                 {loading ? (
                     <div className="history-empty">
                         <History size={35} />
                         <h2>Loading browsing history</h2>
                         <p>Please wait while your records are retrieved.</p>
                     </div>
-                ) : error ? (
-                    <div className="history-empty">
-                        <History size={35} />
-                        <h2>Unable to display history</h2>
-                        <p>Please try refreshing the page.</p>
-                    </div>
-                ) : filteredHistory.length === 0 ? (
+                ) : !error && records.length === 0 ? (
                     <div className="history-empty">
                         <div className="empty-icon">
-                            {history.length === 0 ? (
+                            {pagination.total === 0 && !debouncedSearch ? (
                                 <Globe size={35} />
                             ) : (
                                 <Search size={35} />
@@ -260,84 +255,110 @@ function HistoryPage() {
                         </div>
 
                         <h2>
-                            {history.length === 0
+                            {!debouncedSearch && !appliedDates.startDate
                                 ? 'No browsing records found'
-                                : 'No matching records'
-                            }
+                                : 'No matching records'}
                         </h2>
 
                         <p>
-                            {history.length === 0
+                            {!debouncedSearch && !appliedDates.startDate
                                 ? 'Upload a browser history CSV file to view your browsing activity here.'
-                                : 'Try changing your search term or date filters.'
-                            }
+                                : 'Try changing your search term or date filters.'}
                         </p>
                     </div>
                 ) : (
-
-                    /* Browsing History Table */
-                    <div className="history-table-container">
-                        <table className="history-table">
-
-                            <thead>
-                                <tr>
-                                    <th>Website</th>
-                                    <th>Page Title</th>
-                                    <th>Category</th>
-                                    <th>Visit Date & Time</th>
-                                </tr>
-                            </thead>
-
-                            <tbody>
-                                {filteredHistory.map((item) => (
-                                    <tr key={item.id}>
-
-                                        <td>
-                                            <div className="history-website">
-                                                <div className="history-website-icon">
-                                                    <Globe size={17} />
-                                                </div>
-
-                                                <a
-                                                    href={item.website_url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    title={item.website_url}
-                                                >
-                                                    {getWebsiteName(item.website_url)}
-                                                </a>
-                                            </div>
-                                        </td>
-
-                                        <td>
-                                            <span
-                                                className="history-page-title"
-                                                title={item.page_title || ''}
-                                            >
-                                                {item.page_title || 'Untitled page'}
-                                            </span>
-                                        </td>
-
-                                        <td>
-                                            <span className="history-category">
-                                                {item.category_name || 'Uncategorized'}
-                                            </span>
-                                        </td>
-
-                                        <td>
-                                            <div className="history-visit-time">
-                                                <CalendarDays size={15} />
-                                                {formatVisitTime(item.visit_time)}
-                                            </div>
-                                        </td>
-
+                    <>
+                        <div className="history-table-container">
+                            <table className="history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Website</th>
+                                        <th>Page Title</th>
+                                        <th>Category</th>
+                                        <th>Visit Date &amp; Time</th>
                                     </tr>
-                                ))}
-                            </tbody>
+                                </thead>
 
-                        </table>
-                    </div>
+                                <tbody>
+                                    {records.map((item) => (
+                                        <tr key={item.id}>
+                                            <td>
+                                                <div className="history-website">
+                                                    <div className="history-website-icon">
+                                                        <Globe size={17} />
+                                                    </div>
 
+                                                    <a
+                                                        href={item.website_url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        title={item.website_url}
+                                                    >
+                                                        {getWebsiteName(item.website_url)}
+                                                    </a>
+                                                </div>
+                                            </td>
+
+                                            <td>
+                                                <span
+                                                    className="history-page-title"
+                                                    title={item.page_title || ''}
+                                                >
+                                                    {item.page_title || 'Untitled page'}
+                                                </span>
+                                            </td>
+
+                                            <td>
+                                                <span className="history-category">
+                                                    {item.category_name || 'Uncategorized'}
+                                                </span>
+                                            </td>
+
+                                            <td>
+                                                <div className="history-visit-time">
+                                                    <CalendarDays size={15} />
+                                                    {formatVisitTime(item.visit_time)}
+                                                    {Number(item.visit_count) > 1 && (
+                                                        <span className="visit-count-badge">
+                                                            ×{item.visit_count}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="pagination">
+                            <button
+                                type="button"
+                                className="pagination-button"
+                                onClick={() => goToPage(pagination.page - 1)}
+                                disabled={pagination.page <= 1 || loading}
+                                aria-label="Previous page"
+                            >
+                                <ChevronLeft size={17} />
+                                Previous
+                            </button>
+
+                            <span className="pagination-info">
+                                Page {pagination.page} of {pagination.totalPages}
+                            </span>
+
+                            <button
+                                type="button"
+                                className="pagination-button"
+                                onClick={() => goToPage(pagination.page + 1)}
+                                disabled={pagination.page >= pagination.totalPages || loading}
+                                aria-label="Next page"
+                            >
+                                Next
+                                <ChevronRight size={17} />
+                            </button>
+                        </div>
+                    </>
                 )}
 
             </div>

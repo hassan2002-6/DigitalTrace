@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 
@@ -7,7 +6,8 @@ import {
     Globe,
     Trophy,
     CalendarDays,
-    Filter
+    Filter,
+    Layers
 } from 'lucide-react';
 
 import {
@@ -22,8 +22,15 @@ import {
     getWebsiteCategories,
     getTopWebsites,
     getHourlyActivity,
-    getHourlyWebsiteBreakdown
+    getHourlyWebsiteBreakdown,
+    getDomains
 } from '../services/analyticsService';
+
+const PERIODS = [
+    { value: 'daily', label: 'Daily' },
+    { value: 'weekly', label: 'Weekly' },
+    { value: 'monthly', label: 'Monthly' }
+];
 
 function Analytics() {
     const { theme } = useOutletContext();
@@ -33,10 +40,12 @@ function Analytics() {
     const [websites, setWebsites] = useState([]);
     const [hourly, setHourly] = useState([]);
     const [hourlyWebsites, setHourlyWebsites] = useState([]);
+    const [domains, setDomains] = useState([]);
+
+    const [period, setPeriod] = useState('daily');
 
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-
     const [appliedDates, setAppliedDates] = useState({
         startDate: '',
         endDate: ''
@@ -46,12 +55,14 @@ function Analytics() {
     const [error, setError] = useState('');
 
     useEffect(() => {
+        let cancelled = false;
+
         const fetchAnalytics = async () => {
             try {
                 setLoading(true);
                 setError('');
 
-                const params = {};
+                const params = { period };
 
                 if (appliedDates.startDate) {
                     params.startDate = appliedDates.startDate;
@@ -66,33 +77,48 @@ function Analytics() {
                     categoryData,
                     websiteData,
                     hourlyData,
-                    hourlyWebsiteData
+                    hourlyWebsiteData,
+                    domainData
                 ] = await Promise.all([
                     getBrowsingActivity(params),
                     getWebsiteCategories(params),
                     getTopWebsites(params),
                     getHourlyActivity(params),
-                    getHourlyWebsiteBreakdown(params)
+                    getHourlyWebsiteBreakdown(params),
+                    getDomains(params)
                 ]);
 
-                setActivity(activityData);
+                if (cancelled) {
+                    return;
+                }
+
+                setActivity(activityData.buckets || []);
                 setCategories(categoryData);
                 setWebsites(websiteData);
                 setHourly(hourlyData);
                 setHourlyWebsites(hourlyWebsiteData);
+                setDomains(domainData);
 
             } catch (err) {
-                setError(
-                    err.response?.data?.message ||
-                    'Unable to load analytics data. Please try again.'
-                );
+                if (!cancelled) {
+                    setError(
+                        err.response?.data?.message ||
+                        'Unable to load analytics data. Please try again.'
+                    );
+                }
             } finally {
-                setLoading(false);
+                if (!cancelled) {
+                    setLoading(false);
+                }
             }
         };
 
         fetchAnalytics();
-    }, [appliedDates]);
+
+        return () => {
+            cancelled = true;
+        };
+    }, [appliedDates, period]);
 
     const handleApplyFilter = () => {
         if (startDate && endDate && startDate > endDate) {
@@ -101,49 +127,26 @@ function Analytics() {
         }
 
         setError('');
-
-        setAppliedDates({
-            startDate,
-            endDate
-        });
+        setAppliedDates({ startDate, endDate });
     };
 
     const handleResetFilter = () => {
         setStartDate('');
         setEndDate('');
-
-        setAppliedDates({
-            startDate: '',
-            endDate: ''
-        });
-
+        setAppliedDates({ startDate: '', endDate: '' });
         setError('');
     };
 
-    // Calculate analytics statistics
     const totalVisits = activity.reduce(
         (total, item) => total + Number(item.total_visits || 0),
         0
     );
 
-    const uniqueWebsites = websites.length;
-
     const mostVisitedWebsite = [...websites].sort(
         (a, b) => Number(b.total_visits) - Number(a.total_visits)
     )[0];
 
-    const mostVisitedWebsiteName = mostVisitedWebsite?.website_url
-        ? (() => {
-            try {
-                return new URL(mostVisitedWebsite.website_url)
-                    .hostname.replace(/^www\./, '');
-            } catch {
-                return mostVisitedWebsite.website_url;
-            }
-        })()
-        : 'No data';
-
-    const mostActiveDay = activity.reduce(
+    const mostActiveBucket = activity.reduce(
         (highest, current) =>
             Number(current.total_visits) > Number(highest?.total_visits || 0)
                 ? current
@@ -151,8 +154,8 @@ function Analytics() {
         null
     );
 
-    const formattedActiveDay = mostActiveDay?.activity_date
-        ? new Date(mostActiveDay.activity_date).toLocaleDateString(
+    const formattedActiveBucket = mostActiveBucket?.bucket
+        ? new Date(`${mostActiveBucket.bucket}T00:00:00Z`).toLocaleDateString(
             'en-US',
             {
                 month: 'short',
@@ -171,25 +174,25 @@ function Analytics() {
             description: 'Total recorded browsing visits'
         },
         {
-            title: 'Unique Websites',
-            value: uniqueWebsites,
+            title: 'Unique Domains',
+            value: domains.length,
             icon: Globe,
-            description: 'Different websites visited'
+            description: 'Distinct domains visited'
         },
         {
             title: 'Most Visited Website',
-            value: mostVisitedWebsiteName,
+            value: mostVisitedWebsite?.website_url || 'No data',
             icon: Trophy,
             description: mostVisitedWebsite
                 ? `${mostVisitedWebsite.total_visits} recorded visits`
                 : 'No website visits recorded'
         },
         {
-            title: 'Most Active Day',
-            value: formattedActiveDay,
+            title: period === 'monthly' ? 'Most Active Month' : period === 'weekly' ? 'Most Active Week' : 'Most Active Day',
+            value: formattedActiveBucket,
             icon: CalendarDays,
-            description: mostActiveDay
-                ? `${mostActiveDay.total_visits} visits on this day`
+            description: mostActiveBucket
+                ? `${mostActiveBucket.total_visits} visits in this period`
                 : 'No activity recorded'
         }
     ];
@@ -197,31 +200,38 @@ function Analytics() {
     return (
         <div className="page-container">
 
-            {/* Page Header */}
             <div className="page-header">
                 <div>
                     <h1>Analytics</h1>
                     <p>Explore your browsing patterns and activity</p>
                 </div>
+
+                <div className="period-toggle" role="group" aria-label="Analytics period">
+                    {PERIODS.map((option) => (
+                        <button
+                            key={option.value}
+                            type="button"
+                            className={period === option.value ? 'active' : ''}
+                            onClick={() => setPeriod(option.value)}
+                        >
+                            {option.label}
+                        </button>
+                    ))}
+                </div>
             </div>
 
-            {/* Date Filter */}
             <div className="date-filter-panel">
                 <div className="date-filter-heading">
                     <CalendarDays size={20} />
                     <div>
                         <h3>Filter Analytics</h3>
-                        <p>
-                            Select a date range to explore your browsing activity
-                        </p>
+                        <p>Select a date range to explore your browsing activity</p>
                     </div>
                 </div>
 
                 <div className="date-filter-fields">
                     <div className="date-filter-input">
-                        <label htmlFor="analytics-start-date">
-                            Start Date
-                        </label>
+                        <label htmlFor="analytics-start-date">Start Date</label>
                         <input
                             id="analytics-start-date"
                             type="date"
@@ -232,9 +242,7 @@ function Analytics() {
                     </div>
 
                     <div className="date-filter-input">
-                        <label htmlFor="analytics-end-date">
-                            End Date
-                        </label>
+                        <label htmlFor="analytics-end-date">End Date</label>
                         <input
                             id="analytics-end-date"
                             type="date"
@@ -267,14 +275,10 @@ function Analytics() {
                 </div>
             </div>
 
-            {/* Error Message */}
             {error && (
-                <div className="error-message">
-                    {error}
-                </div>
+                <div className="error-message">{error}</div>
             )}
 
-            {/* Browsing Overview */}
             <div className="analytics-section">
                 <div className="analytics-section-heading">
                     <h2>Browsing Overview</h2>
@@ -305,23 +309,19 @@ function Analytics() {
                 </div>
             </div>
 
-            {/* Detailed Analytics */}
             <div className="analytics-section">
                 <div className="analytics-section-heading">
                     <h2>Detailed Analytics</h2>
-                    <p>
-                        Explore your browsing patterns through interactive charts
-                    </p>
+                    <p>Explore your browsing patterns through interactive charts</p>
                 </div>
 
                 <div className="dashboard-grid">
 
-                    {/* Daily Browsing Activity */}
-                    <div className="chart-panel">
+                    <div className="chart-panel chart-panel--wide">
                         <div className="panel-header">
                             <div>
-                                <h3>Daily Browsing Activity</h3>
-                                <p>Website visits by date</p>
+                                <h3>{PERIODS.find((item) => item.value === period)?.label} Browsing Activity</h3>
+                                <p>Website visits by {period.replace('ly', '')}</p>
                             </div>
                         </div>
 
@@ -331,6 +331,7 @@ function Analytics() {
                             ) : activity.length > 0 ? (
                                 <ActivityLineChart
                                     activity={activity}
+                                    period={period}
                                     theme={theme}
                                 />
                             ) : (
@@ -339,7 +340,6 @@ function Analytics() {
                         </div>
                     </div>
 
-                    {/* Category Distribution */}
                     <div className="chart-panel">
                         <div className="panel-header">
                             <div>
@@ -362,12 +362,11 @@ function Analytics() {
                         </div>
                     </div>
 
-                    {/* Most Visited Websites */}
                     <div className="chart-panel">
                         <div className="panel-header">
                             <div>
                                 <h3>Most Visited Websites</h3>
-                                <p>Most frequently visited websites</p>
+                                <p>Most frequently visited domains</p>
                             </div>
                         </div>
 
@@ -385,7 +384,6 @@ function Analytics() {
                         </div>
                     </div>
 
-                    {/* Hourly Activity */}
                     <div className="chart-panel">
                         <div className="panel-header">
                             <div>
@@ -410,6 +408,62 @@ function Analytics() {
                     </div>
 
                 </div>
+            </div>
+
+            <div className="chart-panel domain-panel">
+                <div className="panel-header">
+                    <div>
+                        <h3>Domain Breakdown</h3>
+                        <p>Every domain, its category and recorded visits</p>
+                    </div>
+
+                    <span className="panel-badge">
+                        <Layers size={14} />
+                        {domains.length} domains
+                    </span>
+                </div>
+
+                {loading ? (
+                    <p>Loading domains...</p>
+                ) : domains.length === 0 ? (
+                    <p>No domain data available.</p>
+                ) : (
+                    <div className="domain-table-wrap">
+                        <table className="domain-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Domain</th>
+                                    <th>Category</th>
+                                    <th>Unique URLs</th>
+                                    <th>Visits</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {domains.slice(0, 15).map((domain, index) => (
+                                    <tr key={domain.hostname}>
+                                        <td>{index + 1}</td>
+                                        <td>
+                                            <strong>{domain.hostname}</strong>
+                                        </td>
+                                        <td>
+                                            <span className="history-category">
+                                                {domain.category_name}
+                                            </span>
+                                        </td>
+                                        <td>{domain.unique_urls}</td>
+                                        <td>
+                                            <span className="domain-visits">
+                                                {domain.total_visits}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
 
         </div>

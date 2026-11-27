@@ -2,11 +2,9 @@ const db = require('./config/db');
 
 async function testConnection() {
     try {
-        const connection = await db.getConnection();
+        const result = await db.query('SELECT NOW() AS now');
 
-        console.log('MySQL database connected successfully!');
-
-        connection.release();
+        console.log('PostgreSQL connected successfully at', result.rows[0].now);
     } catch (error) {
         console.log('Database connection failed:', error.message);
     } finally {

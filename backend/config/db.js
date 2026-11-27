@@ -1,12 +1,17 @@
-const mysql = require('mysql2/promise');
+const { Pool, types } = require('pg');
 require('dotenv').config();
 
-const db = mysql.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    port: process.env.DB_PORT
+const { getPgConfig } = require('./pgConfig');
+
+// Return TIMESTAMP (without time zone) as the original wall-clock string
+// instead of converting it to a JS Date. This keeps exported times stable
+// regardless of the server's timezone (important on Vercel/Neon).
+types.setTypeParser(1114, (value) => value);
+
+const pool = new Pool(getPgConfig(process.env.DATABASE_URL));
+
+pool.on('error', (error) => {
+    console.error('Unexpected PostgreSQL pool error:', error.message);
 });
 
-module.exports = db;
+module.exports = pool;

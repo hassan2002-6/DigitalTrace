@@ -16,12 +16,14 @@ function Upload() {
     const [uploading, setUploading] = useState(false);
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
+    const [errorDetails, setErrorDetails] = useState([]);
 
     const handleFileChange = (event) => {
         const file = event.target.files[0];
 
         setMessage('');
         setError('');
+        setErrorDetails([]);
 
         if (!file) {
             setSelectedFile(null);
@@ -56,6 +58,7 @@ function Upload() {
         setUploading(true);
         setMessage('');
         setError('');
+        setErrorDetails([]);
 
         try {
             const formData = new FormData();
@@ -72,7 +75,10 @@ function Upload() {
             );
 
             setMessage(
-                `${response.data.message}. Records imported: ${response.data.total_records}`
+                `${response.data.message} ` +
+                `Rows: ${response.data.total_records} · ` +
+                `Imported: ${response.data.imported_records} · ` +
+                `Duplicates: ${response.data.duplicates}`
             );
 
             setSelectedFile(null);
@@ -81,6 +87,12 @@ function Upload() {
             setError(
                 err.response?.data?.message ||
                 'Unable to upload the file. Please try again.'
+            );
+
+            setErrorDetails(
+                Array.isArray(err.response?.data?.errors)
+                    ? err.response.data.errors
+                    : []
             );
         } finally {
             setUploading(false);
@@ -106,9 +118,30 @@ function Upload() {
                 <h2>Upload your CSV file</h2>
 
                 <p>
-                    Select your exported browser history CSV file
+                    Select your exported Chrome or Edge browser history CSV file
                     to begin analyzing your browsing activity.
                 </p>
+
+                <div className="upload-format">
+                    <h3>Required columns</h3>
+
+                    <p>
+                        <code>URL</code>, <code>Title</code> and{' '}
+                        <code>Visit Time</code>. Common header variants such as{' '}
+                        <code>Website URL</code>, <code>Page Title</code> and{' '}
+                        <code>Last Visit Time</code> are recognized automatically,
+                        along with ISO, US (MM/DD/YYYY) and Chromium timestamp
+                        formats.
+                    </p>
+
+                    <p>
+                        No export yet?{' '}
+                        <a href="/sample-browser-history.csv" download>
+                            Download a sample CSV
+                        </a>{' '}
+                        to test the complete flow.
+                    </p>
+                </div>
 
                 <form onSubmit={handleUpload}>
                     <label className="upload-dropzone">
@@ -116,7 +149,7 @@ function Upload() {
 
                         <strong>Choose a CSV file</strong>
 
-                        <span>CSV format · Maximum size 5 MB</span>
+                        <span>Chrome/Edge CSV · Maximum size 5 MB</span>
 
                         <input
                             type="file"
@@ -137,6 +170,14 @@ function Upload() {
                             <AlertCircle size={18} />
                             <span>{error}</span>
                         </div>
+                    )}
+
+                    {errorDetails.length > 0 && (
+                        <ul className="upload-errors">
+                            {errorDetails.map((detail, index) => (
+                                <li key={index}>{detail}</li>
+                            ))}
+                        </ul>
                     )}
 
                     {message && (

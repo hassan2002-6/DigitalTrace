@@ -1,39 +1,91 @@
-
 const express = require('express');
 const router = express.Router();
-const csv = require('csv-parser');
-const { Readable } = require('stream');
 
 const db = require('../config/db');
 const upload = require('../middleware/uploadMiddleware');
 const authMiddleware = require('../middleware/authMiddleware');
-const getDateFilter = require('../utils/dateFilter');
 const getWebsiteCategory = require('../services/categoryService');
-const isValidDateTime = require('../utils/validDateTime');
+const { parseHistoryCsv, CsvValidationError } = require('../services/csvParser');
+const { buildDateFilter } = require('../utils/dateFilterPg');
 
-// Get browser history of the logged-in user
+const DEFAULT_PAGE_SIZE = 25;
+const MAX_PAGE_SIZE = 100;
+
+function toPositiveInt(value, fallback) {
+    const parsed = Number.parseInt(value, 10);
+
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function getHostname(url) {
+    try {
+        return new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+    } catch (error) {
+        return null;
+    }
+}
+
+// Get browser history of the logged-in user (paginated + searchable)
 router.get('/', authMiddleware, async (req, res) => {
     try {
-        const { condition, values } = getDateFilter(req.query);
+        const page = toPositiveInt(req.query.page, 1);
+        const limit = Math.min(toPositiveInt(req.query.limit, DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
+        const offset = (page - 1) * limit;
+        const search = typeof req.query.search === 'string'
+            ? req.query.search.trim().slice(0, 100)
+            : '';
 
-        const [history] = await db.query(
+        const { conditions, values } = buildDateFilter(req.query, 2);
+        const where = ['bh.user_id = $1', ...conditions];
+
+        if (search) {
+            const index = values.length + 2;
+            where.push(
+                `(bh.website_url ILIKE $${index} OR bh.page_title ILIKE $${index} OR d.hostname ILIKE $${index})`
+            );
+            values.push(`%${search}%`);
+        }
+
+        const whereSql = where.join(' AND ');
+        const queryValues = [req.user.id, ...values];
+
+        const countResult = await db.query(
+            `SELECT COUNT(*)::int AS total
+             FROM browser_history bh
+             LEFT JOIN domains d ON bh.domain_id = d.id
+             WHERE ${whereSql}`,
+            queryValues
+        );
+
+        const total = countResult.rows[0].total;
+
+        const historyResult = await db.query(
             `SELECT
                 bh.id,
                 bh.website_url,
                 bh.page_title,
                 bh.visit_time,
+                bh.visit_count,
+                d.hostname,
                 wc.category_name
-            FROM browser_history bh
-            LEFT JOIN website_categories wc
-                ON bh.category_id = wc.id
-            INNER JOIN uploaded_files uf
-                ON bh.upload_id = uf.id
-            WHERE uf.user_id = ? ${condition}
-            ORDER BY bh.visit_time DESC, bh.id DESC`,
-            [req.user.id, ...values]
+             FROM browser_history bh
+             LEFT JOIN domains d ON bh.domain_id = d.id
+             LEFT JOIN website_categories wc ON d.category_id = wc.id
+             WHERE ${whereSql}
+             ORDER BY bh.visit_time DESC, bh.id DESC
+             LIMIT $${queryValues.length + 1} OFFSET $${queryValues.length + 2}`,
+            [...queryValues, limit, offset]
         );
 
-        res.json(history);
+        res.json({
+            records: historyResult.rows,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.max(1, Math.ceil(total / limit))
+            }
+        });
 
     } catch (error) {
         res.status(400).json({
@@ -45,17 +97,20 @@ router.get('/', authMiddleware, async (req, res) => {
 // Get uploaded files of the logged-in user
 router.get('/uploads', authMiddleware, async (req, res) => {
     try {
-        const [files] = await db.query(
-            `SELECT id, file_name, file_type, upload_date, status
+        const result = await db.query(
+            `SELECT id, file_name, file_type, upload_date, status,
+                    row_count, visit_count, duplicate_count
              FROM uploaded_files
-             WHERE user_id = ?
+             WHERE user_id = $1
              ORDER BY upload_date DESC`,
             [req.user.id]
         );
 
-        res.json(files);
+        res.json(result.rows);
 
     } catch (error) {
+        console.error('Uploads list error:', error.message);
+
         res.status(500).json({
             message: 'Error fetching uploaded files'
         });
@@ -72,61 +127,49 @@ router.delete('/uploads/:id', authMiddleware, async (req, res) => {
         });
     }
 
-    let connection;
+    const client = await db.connect();
 
     try {
-        connection = await db.getConnection();
+        await client.query('BEGIN');
 
-        await connection.beginTransaction();
-
-        // Check whether the file belongs to the logged-in user
-        const [files] = await connection.query(
+        const files = await client.query(
             `SELECT id
              FROM uploaded_files
-             WHERE id = ? AND user_id = ?
+             WHERE id = $1 AND user_id = $2
              FOR UPDATE`,
             [uploadId, req.user.id]
         );
 
-        if (files.length === 0) {
-            await connection.rollback();
+        if (files.rows.length === 0) {
+            await client.query('ROLLBACK');
 
             return res.status(404).json({
                 message: 'Uploaded file not found'
             });
         }
 
-        // Delete browsing records connected to this file
-        await connection.query(
-            'DELETE FROM browser_history WHERE upload_id = ?',
+        // Foreign keys cascade to browser_history.
+        await client.query(
+            'DELETE FROM uploaded_files WHERE id = $1',
             [uploadId]
         );
 
-        // Delete the uploaded file record
-        await connection.query(
-            'DELETE FROM uploaded_files WHERE id = ?',
-            [uploadId]
-        );
-
-        await connection.commit();
+        await client.query('COMMIT');
 
         res.json({
             message: 'Uploaded file and its browsing history deleted successfully'
         });
 
     } catch (error) {
-        if (connection) {
-            await connection.rollback();
-        }
+        await client.query('ROLLBACK');
+        console.error('Delete upload error:', error.message);
 
         res.status(500).json({
             message: 'Error deleting uploaded file'
         });
 
     } finally {
-        if (connection) {
-            connection.release();
-        }
+        client.release();
     }
 });
 
@@ -143,135 +186,150 @@ router.post(
         }
 
         try {
-            const records = [];
+            const { records } = await parseHistoryCsv(req.file.buffer);
 
-            await new Promise((resolve, reject) => {
-                Readable.from([req.file.buffer])
-                    .pipe(csv())
-                    .on('data', (row) => {
-                        records.push(row);
-                    })
-                    .on('end', resolve)
-                    .on('error', reject);
-            });
-
-            if (records.length === 0) {
-                return res.status(400).json({
-                    message: 'CSV file is empty'
-                });
-            }
-
-            const history = [];
-
-            for (const row of records) {
-                const url = row.url?.trim();
-                const title = row.title?.trim() || null;
-                const visitTime = row.time?.trim();
-
-                if (!url || !visitTime) {
-                    return res.status(400).json({
-                        message: 'CSV contains missing URL or time values'
-                    });
-                }
-
-                try {
-                    const parsedUrl = new URL(url);
-
-                    if (
-                        parsedUrl.protocol !== 'http:' &&
-                        parsedUrl.protocol !== 'https:'
-                    ) {
-                        throw new Error('Invalid URL');
-                    }
-                } catch (error) {
-                    return res.status(400).json({
-                        message: 'CSV contains an invalid website URL'
-                    });
-                }
-
-                if (!isValidDateTime(visitTime)) {
-                    return res.status(400).json({
-                        message: 'CSV contains an invalid date or time'
-                    });
-                }
-
-                history.push({
-                    url,
-                    title,
-                    visitTime
-                });
-            }
-
-            const connection = await db.getConnection();
+            const client = await db.connect();
 
             try {
-                await connection.beginTransaction();
+                await client.query('BEGIN');
 
-                // Get available website categories
-                const [categories] = await connection.query(
+                const categoriesResult = await client.query(
                     'SELECT id, category_name FROM website_categories'
                 );
 
-                const categoryMap = new Map();
-
-                for (const category of categories) {
-                    categoryMap.set(
-                        category.category_name,
-                        category.id
-                    );
-                }
-
-                // Save uploaded file information
-                const [fileResult] = await connection.query(
-                    `INSERT INTO uploaded_files
-                    (user_id, file_name, file_type, status)
-                    VALUES (?, ?, ?, ?)`,
-                    [
-                        req.user.id,
-                        req.file.originalname,
-                        'csv',
-                        'Completed'
-                    ]
+                const categoryMap = new Map(
+                    categoriesResult.rows.map((row) => [row.category_name, row.id])
                 );
 
-                const uploadId = fileResult.insertId;
+                const fileResult = await client.query(
+                    `INSERT INTO uploaded_files
+                        (user_id, file_name, file_type, status, row_count, visit_count, duplicate_count)
+                     VALUES ($1, $2, $3, $4, 0, 0, 0)
+                     RETURNING id`,
+                    [req.user.id, req.file.originalname, 'csv', 'Processing']
+                );
 
-                // Save browsing records with automatic categories
-                for (const record of history) {
-                    const categoryName = getWebsiteCategory(record.url);
+                const uploadId = fileResult.rows[0].id;
 
-                    const categoryId = categoryMap.get(categoryName) || null;
+                const domainCache = new Map();
+                const prepared = [];
 
-                    await connection.query(
-                        `INSERT INTO browser_history
-                        (category_id, website_url, page_title, visit_time, upload_id)
-                        VALUES (?, ?, ?, ?, ?)`,
-                        [
-                            categoryId,
-                            record.url,
-                            record.title,
+                for (const record of records) {
+                    const hostname = getHostname(record.websiteUrl);
+                    let domainId = null;
+
+                    if (hostname) {
+                        if (domainCache.has(hostname)) {
+                            domainId = domainCache.get(hostname);
+                        } else {
+                            const categoryName = getWebsiteCategory(record.websiteUrl);
+                            const categoryId = categoryMap.get(categoryName) || null;
+
+                            const domainResult = await client.query(
+                                `INSERT INTO domains (hostname, category_id)
+                                 VALUES ($1, $2)
+                                 ON CONFLICT (hostname)
+                                 DO UPDATE SET category_id = COALESCE(domains.category_id, EXCLUDED.category_id)
+                                 RETURNING id`,
+                                [hostname, categoryId]
+                            );
+
+                            domainId = domainResult.rows[0].id;
+                            domainCache.set(hostname, domainId);
+                        }
+                    }
+
+                    prepared.push({
+                        ...record,
+                        domainId
+                    });
+                }
+
+                let insertedRecords = 0;
+                let insertedVisits = 0;
+
+                const CHUNK_SIZE = 500;
+
+                for (let start = 0; start < prepared.length; start += CHUNK_SIZE) {
+                    const chunk = prepared.slice(start, start + CHUNK_SIZE);
+                    const placeholders = [];
+                    const values = [];
+
+                    chunk.forEach((record, index) => {
+                        const base = index * 7;
+                        placeholders.push(
+                            `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7})`
+                        );
+                        values.push(
+                            uploadId,
+                            req.user.id,
+                            record.domainId,
+                            record.websiteUrl,
+                            record.pageTitle,
                             record.visitTime,
-                            uploadId
-                        ]
+                            record.visitCount
+                        );
+                    });
+
+                    const insertResult = await client.query(
+                        `INSERT INTO browser_history
+                            (upload_id, user_id, domain_id, website_url, page_title, visit_time, visit_count)
+                         VALUES ${placeholders.join(', ')}
+                         ON CONFLICT (user_id, website_url, visit_time) DO NOTHING
+                         RETURNING visit_count`,
+                        values
+                    );
+
+                    insertedRecords += insertResult.rowCount;
+                    insertedVisits += insertResult.rows.reduce(
+                        (sum, row) => sum + row.visit_count,
+                        0
                     );
                 }
 
-                await connection.commit();
+                const duplicateCount = records.length - insertedRecords;
+                const status = insertedRecords === 0 ? 'No new records' : 'Completed';
+
+                await client.query(
+                    `UPDATE uploaded_files
+                     SET row_count = $1,
+                         visit_count = $2,
+                         duplicate_count = $3,
+                         status = $4
+                     WHERE id = $5`,
+                    [records.length, insertedVisits, duplicateCount, status, uploadId]
+                );
+
+                await client.query('COMMIT');
 
                 res.status(201).json({
-                    message: 'Browser history uploaded successfully',
+                    message: insertedRecords === 0
+                        ? 'All records were already imported as duplicates.'
+                        : 'Browser history uploaded successfully',
                     file_id: uploadId,
-                    total_records: history.length
+                    total_records: records.length,
+                    imported_records: insertedRecords,
+                    duplicates: duplicateCount,
+                    total_visits: insertedVisits
                 });
 
             } catch (error) {
-                await connection.rollback();
+                await client.query('ROLLBACK');
                 throw error;
             } finally {
-                connection.release();
+                client.release();
             }
 
         } catch (error) {
+            if (error instanceof CsvValidationError) {
+                return res.status(400).json({
+                    message: error.message,
+                    errors: error.details
+                });
+            }
+
+            console.error('Upload error:', error);
+
             res.status(500).json({
                 message: 'Error uploading browser history'
             });

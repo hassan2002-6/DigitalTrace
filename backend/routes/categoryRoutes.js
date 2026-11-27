@@ -5,12 +5,14 @@ const db = require('../config/db');
 
 router.get('/', async (req, res) => {
     try {
-        const [categories] = await db.query(
-            'SELECT * FROM website_categories'
+        const result = await db.query(
+            'SELECT id, category_name FROM website_categories ORDER BY id'
         );
 
-        res.json(categories);
+        res.json(result.rows);
     } catch (error) {
+        console.error('Categories error:', error.message);
+
         res.status(500).json({
             message: 'Error fetching categories'
         });
