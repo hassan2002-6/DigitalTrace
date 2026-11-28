@@ -25,7 +25,7 @@ function getHostname(url) {
     }
 }
 
-// Get browser history of the logged-in user (paginated + searchable)
+// Get shared browser history for all team members (paginated + searchable)
 router.get('/', authMiddleware, async (req, res) => {
     try {
         const page = toPositiveInt(req.query.page, 1);
@@ -35,19 +35,19 @@ router.get('/', authMiddleware, async (req, res) => {
             ? req.query.search.trim().slice(0, 100)
             : '';
 
-        const { conditions, values } = buildDateFilter(req.query, 2);
-        const where = ['bh.user_id = $1', ...conditions];
+        const { conditions, values } = buildDateFilter(req.query, 1);
+        const where = [...conditions];
 
         if (search) {
-            const index = values.length + 2;
+            const index = values.length + 1;
             where.push(
                 `(bh.website_url ILIKE $${index} OR bh.page_title ILIKE $${index} OR d.hostname ILIKE $${index})`
             );
             values.push(`%${search}%`);
         }
 
-        const whereSql = where.join(' AND ');
-        const queryValues = [req.user.id, ...values];
+        const whereSql = where.length ? where.join(' AND ') : 'TRUE';
+        const queryValues = values;
 
         const countResult = await db.query(
             `SELECT COUNT(*)::int AS total
@@ -67,8 +67,11 @@ router.get('/', authMiddleware, async (req, res) => {
                 bh.visit_time,
                 bh.visit_count,
                 d.hostname,
+                u.name AS uploader_name,
                 wc.category_name
              FROM browser_history bh
+             INNER JOIN uploaded_files uf ON bh.upload_id = uf.id
+             INNER JOIN users u ON uf.user_id = u.id
              LEFT JOIN domains d ON bh.domain_id = d.id
              LEFT JOIN website_categories wc ON d.category_id = wc.id
              WHERE ${whereSql}
@@ -94,15 +97,17 @@ router.get('/', authMiddleware, async (req, res) => {
     }
 });
 
-// Get uploaded files of the logged-in user
+// Get uploads from every team member
 router.get('/uploads', authMiddleware, async (req, res) => {
     try {
         const result = await db.query(
-            `SELECT id, file_name, file_type, upload_date, status,
-                    row_count, visit_count, duplicate_count
-             FROM uploaded_files
-             WHERE user_id = $1
-             ORDER BY upload_date DESC`,
+            `SELECT uf.id, uf.file_name, uf.file_type, uf.upload_date, uf.status,
+                    uf.row_count, uf.visit_count, uf.duplicate_count,
+                    u.name AS uploader_name,
+                    (uf.user_id = $1) AS can_delete
+             FROM uploaded_files uf
+             INNER JOIN users u ON uf.user_id = u.id
+             ORDER BY uf.upload_date DESC`,
             [req.user.id]
         );
 

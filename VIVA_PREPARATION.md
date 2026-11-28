@@ -231,8 +231,8 @@ bcrypt is a slow, salted hashing algorithm designed for passwords. Even if the d
 ### 31. What happens when a token expires?
 The Axios response interceptor catches `401`, clears both storages and redirects to `/login`.
 
-### 32. How is one user stopped from seeing another user’s data?
-Every history/analytics query includes `WHERE bh.user_id = $1`, where the id comes from the verified JWT. Deletes check both the upload id and the user id inside a transaction.
+### 32. Do all members see the same data? How are accounts kept separate?
+All read endpoints intentionally return the combined team dataset, so every registered member sees all uploads, charts and history. Login accounts remain separate: the JWT identifies who is asking, each upload records its owner, and only the owner can delete their file.
 
 ---
 
@@ -254,23 +254,21 @@ The original project used MySQL. PostgreSQL was chosen for Neon hosting, stronge
 `backend/config/db.js` creates a `pg` pool using `DATABASE_URL` (the pooled Neon URL) with SSL. Routes call `db.query(...)` or take a client for transactions. Neon credentials live only in `.env` / Vercel environment variables.
 
 ### 37. Show a real SQL query from the project.
-Summary query in `backend/routes/analyticsRoutes.js`:
+Summary query in `backend/routes/analyticsRoutes.js` (team-wide):
 
 ```sql
 SELECT COALESCE(SUM(bh.visit_count), 0)::int AS total_visits,
        COUNT(DISTINCT bh.domain_id)::int AS unique_websites
-FROM browser_history bh
-WHERE bh.user_id = $1;
+FROM browser_history bh;
 ```
 
 ### 38. How do weekly and monthly analytics work?
 The API accepts `?period=weekly|monthly`, whitelists the value, maps it to a PostgreSQL unit and calls:
 
 ```sql
-SELECT to_char(date_trunc($2::text, bh.visit_time), 'YYYY-MM-DD') AS bucket,
+SELECT to_char(date_trunc($1::text, bh.visit_time), 'YYYY-MM-DD') AS bucket,
        SUM(bh.visit_count)::int AS total_visits
 FROM browser_history bh
-WHERE bh.user_id = $1
 GROUP BY 1 ORDER BY 1;
 ```
 

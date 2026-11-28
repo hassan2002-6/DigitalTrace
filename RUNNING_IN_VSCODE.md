@@ -31,7 +31,7 @@ code .
 
 ## Group members: stop here (shared database)
 
-If you are a group member, you do **not** need to create a Neon database, configure a backend, or create any `.env` file. All members share the database hosted by Hassan through the deployed API.
+If you are a group member, you do **not** need to create a Neon database, configure a backend, or create any `.env` file. All members share the database hosted by Hassan through the deployed API, and everyone sees the combined team data.
 
 Short page you can follow instead: <https://github.com/hassan2002-6/DigitalTrace/blob/main/MEMBER_SETUP.md>
 

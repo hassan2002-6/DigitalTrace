@@ -1023,6 +1023,51 @@ html[data-theme="light"] .danger-button {
     color: #B91C1C;
 }
 
+/* ---------- Shared team data ---------- */
+.history-table {
+    min-width: 860px;
+}
+
+.history-uploader {
+    color: #93C5FD;
+    font-size: 11.5px;
+    white-space: nowrap;
+}
+
+.recent-uploader {
+    color: #475569;
+    font-size: 10px;
+}
+
+.team-uploads {
+    margin-top: 24px;
+}
+
+.uploads-table {
+    min-width: 720px;
+}
+
+.uploads-table td:first-child {
+    width: auto;
+}
+
+.uploads-table td:first-child strong {
+    display: inline-block;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+
+html[data-theme="light"] .history-uploader {
+    color: #1D4ED8;
+}
+
+html[data-theme="light"] .recent-uploader {
+    color: #94A3B8;
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 980px) {
     .auth-shell {

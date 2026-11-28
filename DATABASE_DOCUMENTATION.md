@@ -22,13 +22,13 @@ The original project used MySQL (`mysql2`). The migration changed the driver, pl
 users (1) ───< uploaded_files (1) ───< browser_history >─── (1) domains >─── (1) website_categories
    │                                          │
    └──────────────< browser_history ──────────┘   (user_id is denormalised for fast,
-                                                   safely filtered per-user queries)
+                                                   shared team reads; owner kept for delete)
 ```
 
 - One user has many uploads.
 - One upload has many history rows; deleting an upload cascades to its rows.
 - One domain has many history rows; a domain belongs to one category.
-- History rows also store `user_id` directly. This lets every query filter by the authenticated user without joining `uploaded_files`, while the upload foreign key still drives cascading deletes.
+- History rows also store `user_id` directly. That keeps uploader attribution and owner-only deletion fast, while shared reads join `uploaded_files` → `users` for the display name.
 
 ---
 
@@ -106,8 +106,8 @@ A domain is created on first sight. `ON CONFLICT (hostname) DO UPDATE SET catego
 | Index / constraint | Purpose |
 |---|---|
 | `uq_users_email` on `LOWER(email)` | Prevent duplicate accounts |
-| `idx_uploaded_files_user` on `(user_id, upload_date DESC)` | Fast “my uploads” listing |
-| `idx_history_user_time` on `(user_id, visit_time DESC)` | Dashboard/history date queries |
+| `idx_uploaded_files_user` on `(user_id, upload_date DESC)` | Uploader attribution and owner checks |
+| `idx_history_user_time` on `(user_id, visit_time DESC)` | Per-user duplicate checks and date ordering |
 | `idx_history_upload` on `(upload_id)` | Cascade deletes and upload filtering |
 | `idx_history_domain` on `(domain_id)` | Domain joins |
 | `uq_history_user_url_time` on `(user_id, website_url, visit_time)` | Exact duplicate suppression |
@@ -137,16 +137,20 @@ WHERE LOWER(email) = LOWER($1);
 
 ```sql
 SELECT bh.id, bh.website_url, bh.page_title, bh.visit_time,
-       bh.visit_count, d.hostname, wc.category_name
+       bh.visit_count, d.hostname, u.name AS uploader_name,
+       wc.category_name
 FROM browser_history bh
+INNER JOIN uploaded_files uf ON bh.upload_id = uf.id
+INNER JOIN users u ON uf.user_id = u.id
 LEFT JOIN domains d ON bh.domain_id = d.id
 LEFT JOIN website_categories wc ON d.category_id = wc.id
-WHERE bh.user_id = $1
-  AND bh.visit_time >= $2::date
-  AND bh.visit_time < ($3::date + INTERVAL '1 day')
+WHERE bh.visit_time >= $1::date
+  AND bh.visit_time < ($2::date + INTERVAL '1 day')
 ORDER BY bh.visit_time DESC, bh.id DESC
-LIMIT $4 OFFSET $5;
+LIMIT $3 OFFSET $4;
 ```
+
+Both team members see the same rows; the uploader join supplies the name shown in the table.
 
 The count query uses the same `WHERE` clauses so pagination totals match the rows.
 
@@ -155,22 +159,20 @@ The count query uses the same `WHERE` clauses so pagination totals match the row
 ```sql
 SELECT COALESCE(SUM(bh.visit_count), 0)::int AS total_visits,
        COUNT(DISTINCT bh.domain_id)::int AS unique_websites
-FROM browser_history bh
-WHERE bh.user_id = $1;
+FROM browser_history bh;
 ```
 
 ### Daily / weekly / monthly trend
 
 ```sql
-SELECT to_char(date_trunc($2::text, bh.visit_time), 'YYYY-MM-DD') AS bucket,
+SELECT to_char(date_trunc($1::text, bh.visit_time), 'YYYY-MM-DD') AS bucket,
        COALESCE(SUM(bh.visit_count), 0)::int AS total_visits
 FROM browser_history bh
-WHERE bh.user_id = $1
 GROUP BY 1
 ORDER BY 1;
 ```
 
-`$2` is a whitelisted unit: `day`, `week` or `month`.
+`$1` is a whitelisted unit: `day`, `week` or `month`.
 
 ### Hourly activity
 
@@ -178,7 +180,6 @@ ORDER BY 1;
 SELECT EXTRACT(HOUR FROM bh.visit_time)::int AS activity_hour,
        COALESCE(SUM(bh.visit_count), 0)::int AS total_visits
 FROM browser_history bh
-WHERE bh.user_id = $1
 GROUP BY 1
 ORDER BY 1;
 ```
@@ -235,16 +236,16 @@ This guarantees that a malformed CSV or a failed insert never leaves a half-impo
 
 ---
 
-## 7. User-level data protection
+## 7. Shared team read access
 
-Every read and write includes the authenticated user:
+Read endpoints intentionally return the combined dataset:
 
-- history: `WHERE bh.user_id = $1`
-- analytics: `WHERE bh.user_id = $1`
-- uploads: `WHERE user_id = $1`
-- delete: `WHERE id = $1 AND user_id = $2`
+- history: no user filter; joins `uploaded_files` and `users` to show `uploader_name`
+- analytics: no user filter; totals and charts cover every member
+- uploads: all rows, joined to `users` for `uploader_name` and `can_delete`
+- delete: `WHERE id = $1 AND user_id = $2`, so only the original uploader can remove a file
 
-The JWT payload contains the user id, and `authMiddleware` verifies the signature before any query runs. A user cannot request another user’s upload id because ownership is checked inside the delete transaction.
+The JWT payload identifies the signed-in account, and `authMiddleware` verifies the signature before any query runs. Login accounts stay separate even though read data is shared. Each upload and history row keeps `user_id` for attribution and owner-only deletion.
 
 ---
 

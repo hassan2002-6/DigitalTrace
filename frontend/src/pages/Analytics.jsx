@@ -177,7 +177,7 @@ function Analytics() {
             title: 'Unique Domains',
             value: domains.length,
             icon: Globe,
-            description: 'Distinct domains visited'
+            description: 'Distinct domains across the team'
         },
         {
             title: 'Most Visited Website',
@@ -203,7 +203,7 @@ function Analytics() {
             <div className="page-header">
                 <div>
                     <h1>Analytics</h1>
-                    <p>Explore your browsing patterns and activity</p>
+                    <p>Combined browsing patterns from all team members</p>
                 </div>
 
                 <div className="period-toggle" role="group" aria-label="Analytics period">

@@ -60,6 +60,10 @@ api.interceptors.request.use((config) => {
 ### How the backend talks to PostgreSQL
 `backend/config/db.js` creates a `pg` pool from `DATABASE_URL`. Routes call `db.query(...)`; the pool handles SSL and connection reuse.
 
+## Data visibility
+
+All read endpoints require a valid JWT but return the **combined team dataset**. Dashboard totals, charts, domain counts, history and uploads are shared by every registered member. Each history row and upload includes `uploader_name`. Creating an upload still records the owner; deleting an upload is restricted to its owner.
+
 ---
 
 ## 2. Endpoint index
@@ -201,7 +205,7 @@ There is no server endpoint, because JWT is stateless. `Settings.jsx` removes th
 
 ### GET `/history`
 
-- **Purpose:** paginated, searchable, date-filtered browsing history for the current user.
+- **Purpose:** paginated, searchable, date-filtered history shared by the whole team.
 - **Caller:** `History.jsx` → `getBrowsingHistory(params)`.
 - **Query parameters:**
 
@@ -218,15 +222,17 @@ There is no server endpoint, because JWT is stateless. `Settings.jsx` removes th
 
 ```sql
 SELECT bh.id, bh.website_url, bh.page_title, bh.visit_time,
-       bh.visit_count, d.hostname, wc.category_name
+       bh.visit_count, d.hostname, u.name AS uploader_name,
+       wc.category_name
 FROM browser_history bh
+INNER JOIN uploaded_files uf ON bh.upload_id = uf.id
+INNER JOIN users u ON uf.user_id = u.id
 LEFT JOIN domains d ON bh.domain_id = d.id
 LEFT JOIN website_categories wc ON d.category_id = wc.id
-WHERE bh.user_id = $1
-  AND bh.visit_time >= $2::date
-  AND bh.visit_time < ($3::date + INTERVAL '1 day')
+WHERE bh.visit_time >= $1::date
+  AND bh.visit_time < ($2::date + INTERVAL '1 day')
 ORDER BY bh.visit_time DESC, bh.id DESC
-LIMIT $4 OFFSET $5;
+LIMIT $3 OFFSET $4;
 ```
 
 - **Response:**
@@ -241,6 +247,7 @@ LIMIT $4 OFFSET $5;
       "visit_time": "2026-11-23 23:38:02",
       "visit_count": 1,
       "hostname": "google.com",
+      "uploader_name": "Hassan",
       "category_name": "Technology"
     }
   ],
@@ -252,10 +259,10 @@ LIMIT $4 OFFSET $5;
 
 ### GET `/history/uploads`
 
-- **Purpose:** list uploaded files with import statistics.
-- **SQL:** `SELECT id, file_name, file_type, upload_date, status, row_count, visit_count, duplicate_count FROM uploaded_files WHERE user_id = $1 ORDER BY upload_date DESC;`
-- **Response:** array of upload objects.
-- **Frontend:** used for upload management/deletion.
+- **Purpose:** list every team member’s uploaded files with import statistics and uploader names.
+- **SQL:** `SELECT uf.*, u.name AS uploader_name, (uf.user_id = $1) AS can_delete FROM uploaded_files uf JOIN users u ON uf.user_id = u.id ORDER BY uf.upload_date DESC;`
+- **Response:** array of upload objects with `uploader_name` and `can_delete`.
+- **Frontend:** `Upload.jsx` renders the Team uploads table.
 
 ### POST `/history/upload`
 
@@ -333,7 +340,7 @@ DELETE FROM uploaded_files WHERE id = $1;
 
 ## 5. Analytics endpoints
 
-All analytics accept `startDate` and `endDate` (`YYYY-MM-DD`). Every query filters `bh.user_id = $1`.
+All analytics accept `startDate` and `endDate` (`YYYY-MM-DD`). They operate on the combined team dataset; the date filters are the only row filters.
 
 ### GET `/analytics/summary`
 
@@ -343,17 +350,15 @@ All analytics accept `startDate` and `endDate` (`YYYY-MM-DD`). Every query filte
 ```sql
 SELECT COALESCE(SUM(bh.visit_count), 0)::int AS total_visits,
        COUNT(DISTINCT bh.domain_id)::int AS unique_websites
-FROM browser_history bh
-WHERE bh.user_id = $1;
+FROM browser_history bh;
 
 SELECT COUNT(*)::int AS total_files
-FROM uploaded_files WHERE user_id = $1;
+FROM uploaded_files;
 
 SELECT d.hostname AS website_url,
        COALESCE(SUM(bh.visit_count), 0)::int AS total_visits
 FROM browser_history bh
 JOIN domains d ON bh.domain_id = d.id
-WHERE bh.user_id = $1
 GROUP BY d.hostname
 ORDER BY total_visits DESC
 LIMIT 1;
@@ -386,7 +391,6 @@ SELECT d.hostname,
 FROM browser_history bh
 JOIN domains d ON bh.domain_id = d.id
 LEFT JOIN website_categories wc ON d.category_id = wc.id
-WHERE bh.user_id = $1
 GROUP BY d.hostname, wc.category_name
 ORDER BY total_visits DESC;
 ```
@@ -400,10 +404,9 @@ ORDER BY total_visits DESC;
 - **SQL:**
 
 ```sql
-SELECT to_char(date_trunc($2::text, bh.visit_time), 'YYYY-MM-DD') AS bucket,
+SELECT to_char(date_trunc($1::text, bh.visit_time), 'YYYY-MM-DD') AS bucket,
        COALESCE(SUM(bh.visit_count), 0)::int AS total_visits
 FROM browser_history bh
-WHERE bh.user_id = $1
 GROUP BY 1
 ORDER BY 1;
 ```

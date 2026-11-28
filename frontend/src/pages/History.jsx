@@ -156,7 +156,7 @@ function HistoryPage() {
             <div className="page-header">
                 <div>
                     <h1>Browsing History</h1>
-                    <p>View and explore your uploaded browsing records.</p>
+                    <p>Combined history from every team member.</p>
                 </div>
             </div>
 
@@ -274,6 +274,7 @@ function HistoryPage() {
                                     <tr>
                                         <th>Website</th>
                                         <th>Page Title</th>
+                                        <th>Uploaded By</th>
                                         <th>Category</th>
                                         <th>Visit Date &amp; Time</th>
                                     </tr>
@@ -305,6 +306,12 @@ function HistoryPage() {
                                                     title={item.page_title || ''}
                                                 >
                                                     {item.page_title || 'Untitled page'}
+                                                </span>
+                                            </td>
+
+                                            <td>
+                                                <span className="history-uploader">
+                                                    {item.uploader_name || 'Unknown member'}
                                                 </span>
                                             </td>
 

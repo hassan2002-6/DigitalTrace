@@ -2,7 +2,7 @@
 
 This is the short version for group members. You **do not** need Neon, a database password, a backend terminal, or any `.env` file.
 
-The app you start in VS Code uses the deployed API, which is connected to the shared Neon database. Every member registers a separate account and sees only their own uploads.
+The app you start in VS Code uses the deployed API, which is connected to the shared Neon database. Every member registers a separate login, but all members see the same combined team data with the uploader’s name.
 
 ---
 
@@ -46,13 +46,13 @@ Open it in your browser.
 ## 3. Use the app
 
 1. Click **Create an account** and register with any email/password that meets the rules.
-2. You will start with an empty dashboard — that is expected.
+2. Your dashboard will already show history uploaded by the team (the demo dataset is 320 visits). That is expected.
 3. Open **Upload Data** and upload:
    ```
    frontend\public\sample-browser-history.csv
    ```
    The Upload page also has a “Download a sample CSV” link.
-4. The dashboard should show **320 visits**, **25 domains**, **1 upload** and four charts.
+4. After the upload, the dashboard includes your rows as well and the Team uploads table shows your name next to your file.
 
 ---
 
@@ -95,11 +95,12 @@ npm run dev:shared
 
 ---
 
-## 7. Privacy
+## 7. Shared data and privacy
 
 - Do not create or commit a `backend/.env`.
 - Do not ask for or share the Neon connection string.
-- Each registered account is isolated by the API; other members cannot see your history.
+- The data is shared intentionally: every member sees the combined dashboard and history.
+- Login accounts stay separate, and each CSV shows who uploaded it. Only the uploader can delete their own file.
 - The repository is public: <https://github.com/hassan2002-6/DigitalTrace>
 
 For the owner/full-stack setup, see [README.md](README.md) or [RUNNING_IN_VSCODE.md](RUNNING_IN_VSCODE.md).

@@ -16,12 +16,12 @@ function getPeriod(value) {
     return PERIODS.has(value) ? value : 'daily';
 }
 
-function whereFor(req, startIndex = 2) {
+function whereFor(req, startIndex = 1) {
     const { conditions, values } = buildDateFilter(req.query, startIndex);
 
     return {
-        sql: ['bh.user_id = $1', ...conditions].join(' AND '),
-        values: [req.user.id, ...values]
+        sql: conditions.length ? conditions.join(' AND ') : 'TRUE',
+        values
     };
 }
 
@@ -40,8 +40,7 @@ router.get('/summary', authMiddleware, async (req, res) => {
         );
 
         const filesResult = await db.query(
-            'SELECT COUNT(*)::int AS total_files FROM uploaded_files WHERE user_id = $1',
-            [req.user.id]
+            'SELECT COUNT(*)::int AS total_files FROM uploaded_files'
         );
 
         const popularResult = await db.query(
@@ -251,14 +250,16 @@ router.get('/recent', authMiddleware, async (req, res) => {
                 bh.visit_time,
                 bh.visit_count,
                 d.hostname,
+                u.name AS uploader_name,
                 COALESCE(wc.category_name, 'Uncategorized') AS category_name
              FROM browser_history bh
+             INNER JOIN uploaded_files uf ON bh.upload_id = uf.id
+             INNER JOIN users u ON uf.user_id = u.id
              LEFT JOIN domains d ON bh.domain_id = d.id
              LEFT JOIN website_categories wc ON d.category_id = wc.id
-             WHERE bh.user_id = $1
              ORDER BY bh.visit_time DESC, bh.id DESC
-             LIMIT $2`,
-            [req.user.id, limit]
+             LIMIT $1`,
+            [limit]
         );
 
         res.json(result.rows);

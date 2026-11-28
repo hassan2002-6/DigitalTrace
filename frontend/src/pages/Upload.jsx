@@ -1,15 +1,17 @@
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
     UploadCloud,
     FileSpreadsheet,
     ShieldCheck,
     CheckCircle,
-    AlertCircle
+    AlertCircle,
+    Users
 } from 'lucide-react';
 
 import api from '../services/api';
+import { getUploadedFiles } from '../services/historyService';
 
 function Upload() {
     const [selectedFile, setSelectedFile] = useState(null);
@@ -17,6 +19,52 @@ function Upload() {
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
     const [errorDetails, setErrorDetails] = useState([]);
+    const [uploads, setUploads] = useState([]);
+    const [uploadsLoading, setUploadsLoading] = useState(true);
+    const [uploadsError, setUploadsError] = useState('');
+
+    const loadUploads = async () => {
+        try {
+            setUploadsError('');
+            const data = await getUploadedFiles();
+            setUploads(data);
+        } catch (err) {
+            setUploadsError(
+                err.response?.data?.message ||
+                'Unable to load team uploads.'
+            );
+        } finally {
+            setUploadsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        let cancelled = false;
+
+        getUploadedFiles()
+            .then((data) => {
+                if (!cancelled) {
+                    setUploads(data);
+                }
+            })
+            .catch((err) => {
+                if (!cancelled) {
+                    setUploadsError(
+                        err.response?.data?.message ||
+                        'Unable to load team uploads.'
+                    );
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setUploadsLoading(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const handleFileChange = (event) => {
         const file = event.target.files[0];
@@ -83,6 +131,7 @@ function Upload() {
 
             setSelectedFile(null);
             event.target.reset();
+            loadUploads();
         } catch (err) {
             setError(
                 err.response?.data?.message ||
@@ -99,13 +148,29 @@ function Upload() {
         }
     };
 
+    const formatUploadDate = (value) => {
+        const date = new Date(value);
+
+        if (Number.isNaN(date.getTime())) {
+            return '—';
+        }
+
+        return date.toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
     return (
         <div className="dashboard-page">
             <div className="page-header">
                 <div>
                     <h1>Upload Browser History</h1>
                     <p>
-                        Import your browsing history to analyze your digital activity.
+                        Add a CSV to the shared team dashboard.
                     </p>
                 </div>
             </div>
@@ -200,9 +265,70 @@ function Upload() {
                     <ShieldCheck size={19} />
 
                     <span>
-                        Your uploaded browsing data remains under your control.
+                        Uploads are visible to every registered team member.
+                        Login accounts remain separate.
                     </span>
                 </div>
+            </section>
+
+            <section className="dashboard-panel team-uploads">
+                <div className="panel-header">
+                    <div>
+                        <h2>Team uploads</h2>
+                        <p>CSV files imported by every member</p>
+                    </div>
+
+                    <span className="panel-badge">
+                        <Users size={14} />
+                        {uploads.length} files
+                    </span>
+                </div>
+
+                {uploadsLoading ? (
+                    <p>Loading team uploads...</p>
+                ) : uploadsError ? (
+                    <div className="error-message">{uploadsError}</div>
+                ) : uploads.length === 0 ? (
+                    <p>No team uploads yet.</p>
+                ) : (
+                    <div className="domain-table-wrap">
+                        <table className="domain-table uploads-table">
+                            <thead>
+                                <tr>
+                                    <th>File</th>
+                                    <th>Uploaded by</th>
+                                    <th>Date</th>
+                                    <th>Rows</th>
+                                    <th>Visits</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                {uploads.map((file) => (
+                                    <tr key={file.id}>
+                                        <td>
+                                            <strong>{file.file_name}</strong>
+                                        </td>
+                                        <td>{file.uploader_name || 'Unknown member'}</td>
+                                        <td>{formatUploadDate(file.upload_date)}</td>
+                                        <td>{file.row_count}</td>
+                                        <td>
+                                            <span className="domain-visits">
+                                                {file.visit_count}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span className="history-category">
+                                                {file.status}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </section>
         </div>
     );

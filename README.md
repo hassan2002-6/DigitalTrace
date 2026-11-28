@@ -1,6 +1,6 @@
 # DigitalTrace — Browser History Analyzer
 
-A full-stack web application that turns a Chrome/Edge browser-history CSV export into a private analytics dashboard: total visits, unique domains, top websites, category breakdowns, daily/weekly/monthly trends, hourly activity, searchable history and recent activity.
+A full-stack web application that turns Chrome/Edge browser-history CSV exports into a shared team analytics dashboard: total visits, unique domains, top websites, category breakdowns, daily/weekly/monthly trends, hourly activity, searchable history and recent activity.
 
 Built with **React + Vite**, **Node.js + Express** and **PostgreSQL (Neon in production)** for a Full Stack Development course project.
 
@@ -13,16 +13,17 @@ Built with **React + Vite**, **Node.js + Express** and **PostgreSQL (Neon in pro
 | Area | What works |
 |---|---|
 | Authentication | Register, login, JWT sessions, bcrypt password hashing, remember-me, show/hide password, working logout |
+| Team visibility | Every authenticated member sees all uploads, combined dashboard totals, combined charts and combined history, with the uploader’s name on each file and row |
 | CSV import | Chrome/Edge CSV upload, flexible column names, six timestamp formats, row-level validation, transaction-safe import |
 | Duplicate handling | Exact duplicate visits are skipped (`user_id + URL + visit_time`), with an import report |
 | Dashboard | Real totals, unique domains, upload count, top domain, daily/weekly/monthly line chart, category doughnut, top-domain bar chart, hourly chart, recent activity |
 | History | Server-side search, date filters, 25-row pagination, category and visit-count badges |
 | Analytics | Daily/weekly/monthly trend, category split, top domains, hourly activity, full domain breakdown table |
 | Profile | View account details, update display name, switch dark/light theme, log out |
-| Security | User-scoped queries, JWT middleware, login rate limiting, Helmet, CORS allow-list, 10 KB JSON limit, 4 MB CSV limit |
+| Security | Shared team reads behind JWT authentication, uploader attribution, owner-only deletes, login rate limiting, Helmet, CORS allow-list, 10 KB JSON limit, 4 MB CSV limit |
 | Responsive UI | Desktop split-screen auth, mobile single-column auth, adaptive sidebar/navigation, responsive charts and tables |
 
-No dashboard statistic is hardcoded. Every number and chart is computed from PostgreSQL rows belonging to the signed-in user.
+No dashboard statistic is hardcoded. Every number and chart is computed from PostgreSQL rows uploaded by the team.
 
 ---
 
@@ -111,7 +112,9 @@ npm run dev:shared
 
 Open <http://localhost:5173>, register your own account, and upload `public/sample-browser-history.csv`.
 
-- Your account only sees its own uploads; other members’ data is filtered by user ID.
+- All registered members see the combined team dashboard, charts and history.
+- Login accounts remain separate, and every upload shows who uploaded it.
+- Deletion stays with the original uploader to protect the shared data.
 - **No `.env` file is needed.** Do not create `backend/.env` and do not ask for the Neon connection string.
 - Use `npm run dev:shared`, not `npm run dev` — the normal command expects a local API on port 5000.
 - From the repository root, `npm run dev:members` does the same thing.
@@ -274,6 +277,13 @@ Deployment verified on 27 November 2026:
 - SPA deep link `/login` returns the app shell
 - deleting the verification upload removed its 320 rows without affecting the demo account
 
+Shared team visibility verified on 28 November 2026 with two separate accounts:
+
+- `Hassan` uploaded 320 sample rows and `Mayur` uploaded 3 rows; the shared database now has **643 visits, 28 domains and 3 uploads**.
+- Both accounts see the same combined dashboard, charts and history.
+- The History page shows `UPLOADED BY` for every row; the Upload page lists all three files with their uploader names.
+- Hassan’s attempt to delete Mayur’s upload returned **404**, while Mayur deleted his own upload successfully and the totals returned to 643.
+
 The project is a new Vercel project (`digitaltrace-course`) and does not share a project, domain or environment with any other application.
 
 Build settings come from `vercel.json`:
@@ -301,9 +311,11 @@ The current deployment was created with the Vercel CLI. To enable automatic depl
 
 ## Security notes
 
+- All read endpoints return the combined team dataset; JWT authentication still proves who is asking.
+- Each upload records its owner and appears with the uploader’s name; only that owner can delete it.
 - Passwords are hashed with bcrypt (10 rounds); plain passwords are never stored.
 - JWTs expire after one day and are sent as `Authorization: Bearer <token>`.
-- Every history and analytics query filters by the authenticated `user_id`.
+- All read queries return the shared team dataset; JWT authentication still gates every request.
 - Uploads and deletes run in PostgreSQL transactions; deleting a file cascades to its history rows.
 - `.env` files are git-ignored. Only `.env.example` placeholders are committed.
 - The five-attempt login limit is in-memory; restarting the API resets it.

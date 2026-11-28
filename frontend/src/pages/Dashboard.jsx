@@ -170,13 +170,13 @@ function Dashboard() {
             title: 'Unique Websites',
             value: summary?.unique_websites ?? '—',
             icon: Globe,
-            description: 'Distinct domains visited'
+            description: 'Distinct domains across the team'
         },
         {
             title: 'Total Uploads',
             value: summary?.total_files ?? '—',
             icon: FileUp,
-            description: 'History files uploaded'
+            description: 'Team history files uploaded'
         },
         {
             title: 'Most Visited',
@@ -192,7 +192,7 @@ function Dashboard() {
             <div className="page-header">
                 <div>
                     <h1>Dashboard</h1>
-                    <p>Overview of your digital activity</p>
+                    <p>Combined overview of all team members</p>
                 </div>
 
                 <Link to="/upload" className="header-action">
@@ -417,6 +417,9 @@ function Dashboard() {
                                 <div className="recent-main">
                                     <strong>{item.hostname || item.website_url}</strong>
                                     <span>{item.page_title || 'Untitled page'}</span>
+                                    <span className="recent-uploader">
+                                        Uploaded by {item.uploader_name || 'Unknown member'}
+                                    </span>
                                 </div>
 
                                 <span className="recent-category">
