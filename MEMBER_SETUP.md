@@ -46,7 +46,7 @@ Open it in your browser.
 ## 3. Use the app
 
 1. Click **Create an account** and register with any email/password that meets the rules.
-2. Your dashboard will already show history uploaded by the team (the demo dataset is 320 visits). That is expected.
+2. Your dashboard will already show history uploaded by the team — currently **643 visits across three files** (Hassan, Mayur and the demo account). That is expected.
 3. Open **Upload Data** and upload:
    ```
    frontend\public\sample-browser-history.csv
