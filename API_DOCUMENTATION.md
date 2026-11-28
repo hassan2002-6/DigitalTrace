@@ -426,9 +426,9 @@ ORDER BY 1;
 
 ### GET `/analytics/recent?limit=5`
 
-- **Purpose:** latest visits panel.
-- **SQL:** same joins as history, `ORDER BY visit_time DESC LIMIT $2`.
-- **Frontend:** `Dashboard.jsx` renders five rows with hostname, title, category and time.
+- **Purpose:** latest team visits with uploader names.
+- **SQL:** same joins as history, `ORDER BY bh.visit_time DESC, bh.id DESC LIMIT $1`.
+- **Frontend:** `Dashboard.jsx` renders five rows with hostname, title, category, time and uploader.
 
 ---
 

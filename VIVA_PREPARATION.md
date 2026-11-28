@@ -329,3 +329,6 @@ Three things:
 - Exporting analytics as CSV/PDF.
 - A scheduled cleanup job for old uploads.
 - Splitting the frontend bundle to remove the 500 KB chunk warning.
+
+### 51. If two members upload the same visit, is it counted twice?
+Yes. The unique index is `(user_id, website_url, visit_time)`, so duplicate suppression is per account, not across the team. If Hassan and Mayur both upload the same browser visit, the shared dashboard counts both because they are two members’ records. The uploader name keeps the source clear, and deleting one member’s file removes only that member’s rows.
