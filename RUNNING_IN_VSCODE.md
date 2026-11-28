@@ -8,7 +8,7 @@ This guide is for teammates who have **VS Code, Git and Node.js** but not Hermes
 
 | Tool | Check with | If missing |
 |---|---|---|
-| Node.js 18+ | `node -v` | Install the LTS version from <https://nodejs.org> |
+| Node.js (20.19+ or 22.12+) | `node -v` | Install the current LTS from <https://nodejs.org> |
 | npm | `npm -v` | Included with Node.js |
 | Git | `git --version` | Install from <https://git-scm.com> |
 | VS Code | `code --version` | Install from <https://code.visualstudio.com> |
@@ -32,6 +32,8 @@ code .
 ## Group members: stop here (shared database)
 
 If you are a group member, you do **not** need to create a Neon database, configure a backend, or create any `.env` file. All members share the database hosted by Hassan through the deployed API.
+
+Short page you can follow instead: <https://github.com/hassan2002-6/DigitalTrace/blob/main/MEMBER_SETUP.md>
 
 From the `DigitalTrace` folder:
 

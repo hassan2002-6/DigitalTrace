@@ -32,6 +32,8 @@ No dashboard statistic is hardcoded. Every number and chart is computed from Pos
 
 **Backend** — Node.js 18+, Express 5, PostgreSQL (`pg`), JWT (`jsonwebtoken`), bcrypt, Multer, csv-parser, Helmet, CORS, express-rate-limit.
 
+> The frontend needs **Node.js 20.19+ or 22.12+** because that is Vite 8’s supported range.
+
 **Database** — PostgreSQL 17 (tested) / Neon PostgreSQL (production). Tables: `users`, `uploaded_files`, `domains`, `website_categories`, `browser_history`.
 
 ```
@@ -96,7 +98,9 @@ All group members use the **same Neon database hosted by Hassan**. You do **not*
 
 The Vite dev server proxies `/api` to the deployed Express API. That server holds the Neon connection string in Vercel environment variables, so the browser and the repository never see database credentials.
 
-**You need:** Git, Node.js 18+ and VS Code.
+**You need:** Git, Node.js **20.19+ or 22.12+** and VS Code.
+
+**Short setup page for members:** <https://github.com/hassan2002-6/DigitalTrace/blob/main/MEMBER_SETUP.md>
 
 ```powershell
 git clone https://github.com/hassan2002-6/DigitalTrace.git
@@ -287,6 +291,7 @@ The current deployment was created with the Vercel CLI. To enable automatic depl
 
 ## Documentation
 
+- [MEMBER_SETUP.md](MEMBER_SETUP.md) — the short page to send to group members
 - [RUNNING_IN_VSCODE.md](RUNNING_IN_VSCODE.md) — beginner setup on Windows with VS Code, Git and Node.js
 - [API_DOCUMENTATION.md](API_DOCUMENTATION.md) — every endpoint, request/response, caller and SQL
 - [DATABASE_DOCUMENTATION.md](DATABASE_DOCUMENTATION.md) — tables, relationships, indexes and queries
